@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECG Arrhythmia Classifier</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 40 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polyline points="0,10 6,10 8,4 10,16 12,2 14,18 16,10 20,10 22,7 24,13 26,10 40,10"
+            stroke="var(--accent)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="logo-text">ECG<span class="logo-accent">classifier</span></span>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="predict">Predizione</button>
+        <button class="nav-btn" data-tab="history">Storico</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- PREDICT TAB -->
+  <main id="tab-predict" class="tab active">
+    <div class="container">
+
+      <section class="hero">
+        <p class="hero-label">MIT-BIH Arrhythmia Dataset · CNN 1D vs Random Forest</p>
+        <h1 class="hero-title">Classificazione<br/>Automatica<br/><span class="accent">Aritmie ECG</span></h1>
+        <p class="hero-sub">Inserisci un segnale ECG di 187 campioni per ottenere una diagnosi comparativa tra modello convoluzionale e Random Forest.</p>
+      </section>
+
+      <section class="input-section card">
+        <div class="card-header">
+          <span class="card-label">INPUT SEGNALE</span>
+          <div class="input-tabs">
+            <button class="input-tab active" data-input="manual">Manuale</button>
+            <button class="input-tab" data-input="csv">CSV</button>
+            <button class="input-tab" data-input="random">Esempio casuale</button>
+          </div>
+        </div>
+
+        <div id="input-manual" class="input-panel active">
+          <label class="field-label">187 valori separati da virgola</label>
+          <textarea id="signal-text" class="signal-textarea" placeholder="0.123, -0.045, 0.567, ..."></textarea>
+          <span id="sample-count" class="sample-count">0 / 187 campioni</span>
+        </div>
+
+        <div id="input-csv" class="input-panel">
+          <label class="drop-zone" id="drop-zone">
+            <input type="file" id="csv-file" accept=".csv,.txt" hidden />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="upload-icon">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span class="drop-text">Trascina un file CSV o <u>clicca per caricare</u></span>
+            <span class="drop-hint">Prima riga con 187 valori numerici (188° valore = etichetta MIT-BIH)</span>
+          </label>
+        </div>
+
+        <div id="input-random" class="input-panel">
+          <p class="random-desc">Carica un segnale casuale dal test set MIT-BIH per validazione.</p>
+          <button class="btn btn-outline" id="btn-random">Genera segnale casuale</button>
+        </div>
+
+        <!-- Ground Truth: si auto-popola da CSV/random, editabile solo manualmente -->
+        <div class="ground-truth-wrap">
+          <div class="ground-truth-row">
+            <span class="gt-label-text">GROUND TRUTH</span>
+            <select id="ground-truth-input" class="gt-select">
+              <option value="Non specificato">Non specificato</option>
+              <option value="N (Normale)">N (Normale)</option>
+              <option value="S (Sopraventricolare)">S (Sopraventricolare)</option>
+              <option value="V (Ventricolare)">V (Ventricolare)</option>
+              <option value="F (Fusion)">F (Fusion)</option>
+              <option value="Q (Non classificabile)">Q (Non classificabile)</option>
+            </select>
+            <span class="gt-badge" id="gt-source-badge">Manuale</span>
+          </div>
+        </div>
+
+        <div id="signal-preview" class="signal-preview hidden">
+          <canvas id="ecg-canvas"></canvas>
+        </div>
+
+        <button class="btn btn-primary" id="btn-predict">
+          <span class="btn-text">Classifica segnale</span>
+          <span class="btn-loader hidden">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </span>
+        </button>
+      </section>
+
+      <section id="results-section" class="results-section hidden">
+        <h2 class="section-title">Risultati diagnostici</h2>
+        <div class="results-grid">
+          <div class="result-card" id="result-cnn">
+            <div class="model-badge cnn-badge">CNN 1D</div>
+            <div class="diagnosis-main" id="cnn-diagnosis">—</div>
+            <div class="confidence-row">
+              <span class="conf-label">Confidenza</span>
+              <span class="conf-value" id="cnn-confidence">—</span>
+            </div>
+            <div class="conf-bar-wrap"><div class="conf-bar" id="cnn-bar"></div></div>
+            <div class="reliability-badge" id="cnn-reliability"></div>
+            <div class="prob-chart" id="cnn-probs"></div>
+          </div>
+
+          <div class="result-card" id="result-rf">
+            <div class="model-badge rf-badge">Random Forest</div>
+            <div class="diagnosis-main" id="rf-diagnosis">—</div>
+            <div class="confidence-row">
+              <span class="conf-label">Confidenza</span>
+              <span class="conf-value" id="rf-confidence">—</span>
+            </div>
+            <div class="conf-bar-wrap"><div class="conf-bar" id="rf-bar"></div></div>
+            <div class="reliability-badge" id="rf-reliability"></div>
+            <div class="prob-chart" id="rf-probs"></div>
+          </div>
+        </div>
+
+        <!-- Banner ground truth confronto con predizioni -->
+        <div class="gt-result-banner hidden" id="gt-result-banner"></div>
+
+        <div class="agreement-banner" id="agreement-banner"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- HISTORY TAB -->
+  <main id="tab-history" class="tab">
+    <div class="container">
+      <section class="hero hero-sm">
+        <p class="hero-label">Database predizioni</p>
+        <h1 class="hero-title">Storico<br/><span class="accent">Predizioni</span></h1>
+      </section>
+
+      <div class="history-toolbar">
+        <button class="btn btn-outline" id="btn-refresh">↻ Aggiorna</button>
+        <span id="history-count" class="history-count"></span>
+      </div>
+
+      <div id="history-list" class="history-list">
+        <div class="empty-state">Nessuna predizione disponibile.</div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>Evoluzione del software 2025/2026 · UNIBA · Sonia Sergio 796129</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

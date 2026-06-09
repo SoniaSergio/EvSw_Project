@@ -1,0 +1,78 @@
+services:
+
+  # ── Database ────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: ecg-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ecg-net
+
+  # ── Prediction Service ───────────────────────────────────────────────────────
+  prediction-service:
+    build: ./prediction-service
+    container_name: ecg-prediction
+    restart: unless-stopped
+    environment:
+      MONGO_URI: mongodb://mongo:27017/ecgdb
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    volumes:
+      - ./prediction-service/models:/app/models:ro
+    depends_on:
+      - mongo
+    networks:
+      - ecg-net
+
+  # ── History Service ──────────────────────────────────────────────────────────
+  history-service:
+    build: ./history-service
+    container_name: ecg-history
+    restart: unless-stopped
+    environment:
+      MONGO_URI: mongodb://mongo:27017/ecgdb
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    depends_on:
+      - mongo
+    networks:
+      - ecg-net
+
+  # ── Frontend (Nginx + HTTPS) ─────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: ecg-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP (redirige a HTTPS)
+      - "443:443"    # HTTPS
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/app.conf:ro
+      # Certificati Let's Encrypt (generati da Certbot sul server host)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Cartella per il challenge di rinnovo automatico
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - prediction-service
+      - history-service
+    networks:
+      - ecg-net
+
+  # ── Certbot (rinnovo automatico certificati) ─────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: ecg-certbot
+    restart: unless-stopped
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/www/certbot:/var/www/certbot
+    # Controlla ogni 12h se il certificato va rinnovato (scade ogni 90 giorni)
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --quiet --webroot -w /var/www/certbot; done'"
+
+# ── Volumes & Networks ────────────────────────────────────────────────────────
+volumes:
+  mongo_data:
+
+networks:
+  ecg-net:
+    driver: bridge

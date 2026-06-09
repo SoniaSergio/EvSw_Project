@@ -1,0 +1,26 @@
+# --- Python / Environment ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# --- Docker / Persistenza ---
+# Escludi i dati del database per non committare dati di test locali
+mongo/data/
+# Escludi certificati SSL locali/di test
+certbot/conf/
+certbot/www/
+
+# --- Modelli ML (Best Practice MLOps) ---
+# Escludiamo i modelli binari dal repository git
+prediction-service/models/*.h5
+prediction-service/models/*.pkl
+
+# --- Sistema / OS ---
+.DS_Store
+.vscode/
+.idea/
+*.log
