@@ -57,7 +57,7 @@ Questa versione rappresenta la sua **evoluzione in un sistema distribuito**, rip
 
 Si è passati da un approccio monolitico a un **approccio orientato ai servizi (Service-Oriented Architecture)**, particolarmente adatto per il software basato su cloud, in cui il sistema è stato scomposto in servizi a grana fine, isolati e resilienti ai guasti:
 
-| Aspetto | Versione Gradio (Esame) | Versione Attuale (Microservizi) |
+| Aspetto | Versione Gradio iniziale | Versione Attuale (Microservizi) |
 |:---|:---|:---|
 | **Deployment** | Google Colab, locale | Docker Compose, server remoto con HTTPS |
 | **Interfaccia** | Gradio auto-generata | Frontend custom HTML/CSS/JS (Nginx) |
@@ -72,52 +72,67 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 
 ## 3. Architettura del Sistema e Sicurezza (ALDE)
 
-Il sistema è composto da **4 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`). I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
 
-Per garantire l'assoluta confidenzialita dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico in chiaro risiede nel database: il Service Layer cifra e decifra i dati asincronamente utilizzando l'algoritmo **AES-256 in modalita CBC/HMAC (Fernet)** prima di interagire con MongoDB (garantendo il principio di *Encryption at Rest* e un disaccoppiamento logico perfetto).
+Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
 ```text
-                        ┌─────────────────────────────────┐
-                        │          Client Browser         │
-                        └─────────────────────────────────┘
-                                        │ HTTPS :443
-                        ┌─────────────────────────────────┐
-                        │     Frontend (Nginx)            │
-                        │  - Serve HTML/CSS/JS statici    │
-                        │  - Reverse proxy /api/*         │
-                        │  - Redirect HTTP → HTTPS        │
-                        └────────────┬────────────┬───────┘
-                                     │            │
-              /api/predict/          │            │   /api/history/
-                        ┌────────────▼──┐    ┌────▼───────────────┐
-                        │  Prediction   │    │  History Service   │
-                        │  Service      │    │  (FastAPI :8001)   │
-      (Cifra i dati  ←──┤  (FastAPI     │    │  - Decifra i dati  ├──→ (Estrae JSON
-      prima del DB)     │   :8000)      │    │    al volo per UI  │     in chiaro)
-                        └──────┬────────┘    └───────────┬────────┘
-                               │                         │
-                               └──────────────┬──────────┘
-                                              │
-                              ┌───────────────▼────────────┐
-                              │        MongoDB :27017      │
-                              │   Database: ecgdb          │
-                              │   Collections:             │
-                              │   - predictions (cifrata)  │
-                              │   - ecg_samples (cifrata)  │
-                              └────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                        CLIENT BROWSER                           │
+  └───────────────────────────┬─────────────────────────────────────┘
+                              │ HTTPS :443  (TLS 1.3, Let's Encrypt)
+  ┌───────────────────────────▼─────────────────────────────────────┐
+  │                    FRONTEND  (Nginx :80/:443)                   |
+  │         Serve HTML/CSS/JS statici · Redirect HTTP→HTTPS         │
+  │              Reverse proxy: /api/predict/ · /api/history/       │
+  └──────────────────┬──────────────────────┬───────────────────────┘
+                     │                      │
+         POST /api/predict/      GET /api/history/
+                     │                      │
+  ┌──────────────────▼──────┐   ┌───────────▼──────────────────────┐
+  │   PREDICTION SERVICE    │   │        HISTORY SERVICE           │
+  │   (FastAPI :8000)       │   │        (FastAPI :8001)           │
+  │                         │   │                                  │
+  │  1. Inferenza CNN 1D    │   │  1. Legge doc cifrato da MongoDB │
+  │  2. Inferenza RF        │   │  2. Decifra in RAM (Fernet)      │
+  │  3. Cifra risultati     │   │  3. Restituisce JSON in chiaro   │
+  │     + segnale (Fernet)  │   │     al frontend                  │
+  │  4. Salva su MongoDB    │   │                                  │
+  └──────────┬──────────────┘   └────────────────┬─────────────────┘
+             │                                   │
+             │          ╔═════════════╗          │
+             │          ║  ALDE       ║          │
+             └──────────╢  BOUNDARY   ╟──────────┘
+                        ║  (tutti i   ║
+                        ║  dati sono  ║
+                        ║  cifrati)   ║
+                        ╚══════╤══════╝
+                               │
+  ┌────────────────────────────▼────────────────────────────────────┐
+  │                     MONGODB  :27017                             │
+  │  Database: ecgdb                                                │
+  │  ├── predictions   { signal🔒, cnn🔒, rf🔒, ground_truth🔒 }  │
+  │  └── ecg_samples   { signal_encrypted🔒, ground_truth, source} │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  SEED  (one-shot, restart: "no")                                │
+  │  Popola ecg_samples con i campioni MIT-BIH cifrati al primo     │
+  │  avvio. Si arresta automaticamente dopo l'inserimento.          │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Tutti i servizi comunicano esclusivamente su: ecg-net (bridge)
+  MongoDB non espone porte verso l'host.
 ```
 
 ### Flusso di una predizione
 
 1. Il browser invia `POST /api/predict/` con il segnale (array di 187 float).
 2. Nginx fa reverse proxy verso `prediction-service:8000/predict/`.
-3. Il prediction service esegue inferenza **parallela** su CNN 1D e RF.
-4. I risultati diagnostici e il segnale vengono cifrati in stringhe illeggibili dal microservizio Python tramite la secret key.
-5. I dati protetti vengono salvati su MongoDB.
-6. Il frontend renderizza i risultati ricevuti in chiaro dalla risposta API.
-7. Nelle letture successive, l'history-service estrarrà il dato cifrato e lo decifrerà in RAM prima di mandarlo alla UI (In-Memory Processing).
-
----
+3. Il prediction service esegue l'inferenza con CNN 1D e successivamente con RF, restituendo per ciascun modello la diagnosi, la confidenza e la distribuzione di probabilità sulle 5 classi.
+4. Il segnale grezzo e i risultati diagnostici vengono cifrati con Fernet prima di essere scritti su MongoDB.
+5. La risposta API — con i dati in chiaro — viene restituita immediatamente al frontend per la visualizzazione.
+6. Nelle letture successive tramite lo storico, l'history-service recupera i documenti cifrati e li decifra in RAM prima di inviarli alla UI; il segnale grezzo è escluso dalla lista paginata e incluso solo nella lettura per ID.
 
 ## 4. Stack Tecnologico
 
@@ -132,7 +147,7 @@ Per garantire l'assoluta confidenzialita dei dati medici, l'architettura impleme
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
 | **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
 | **Database** | MongoDB | 7.0 | Persistenza predizioni + campioni MIT-BIH |
-| **ODM Asincrono** | Motor + PyMongo | 3.x / 4.x | Driver async MongoDB per FastAPI |
+| **ODM Asincrono** | Motor + PyMongo | 3.6.0 / 4.9.2 | Driver async MongoDB per FastAPI |
 | **Validazione** | Pydantic | 2.x | Validazione input/output API |
 | **Containerization** | Docker + Docker Compose | — | Orchestrazione servizi |
 | **TLS/HTTPS** | Let's Encrypt + Certbot | — | Certificati SSL con rinnovo automatico |
@@ -244,7 +259,7 @@ Entrambi i modelli espongono uno **stato di affidabilita** basato su soglia fiss
 
 #### `POST /predict/`
 
-Esegue l'inferenza parallela con CNN 1D e RF sul segnale ECG fornito. Salva il risultato su MongoDB.
+Esegue l'inferenza con CNN 1D e RF sul segnale ECG fornito e salva il risultato cifrato su MongoDB.
 
 **Request body:**
 ```json
@@ -253,7 +268,8 @@ Esegue l'inferenza parallela con CNN 1D e RF sul segnale ECG fornito. Salva il r
   "ground_truth": "N (Normale)"
 }
 ```
-> Il campo `signal` deve contenere esattamente **187 valori float**. Il campo `ground_truth` è opzionale e viene salvato cifrato insieme alla predizione per consentire la validazione clinica a posteriori.
+
+> `signal` deve contenere esattamente **187 valori float**. `ground_truth` è opzionale: se presente (es. da CSV MIT-BIH o campione casuale), viene salvato cifrato insieme alla predizione per consentire la validazione clinica a posteriori.
 
 **Response `200 OK`:**
 ```json
@@ -291,14 +307,14 @@ Esegue l'inferenza parallela con CNN 1D e RF sul segnale ECG fornito. Salva il r
 
 #### `GET /history/`
 
-Ritorna le ultime predizioni salvate, ordinate dalla piu recente. Il segnale grezzo e escluso dalla lista per alleggerire la risposta.
+Ritorna le predizioni salvate, ordinate dalla più recente. Il segnale grezzo è escluso dalla risposta per alleggerire il payload.
 
 **Query parameters:**
 
 | Parametro | Tipo | Default | Range | Descrizione |
 |:---|:---|:---:|:---:|:---|
-| `limit` | int | 50 | 1-200 | Numero massimo di record da restituire |
-| `skip` | int | 0 | >= 0 | Offset per la paginazione |
+| `limit` | int | 50 | 1–200 | Numero massimo di record |
+| `skip` | int | 0 | ≥ 0 | Offset per la paginazione |
 
 **Response `200 OK`:**
 ```json
@@ -308,34 +324,40 @@ Ritorna le ultime predizioni salvate, ordinate dalla piu recente. Il segnale gre
   "limit": 50,
   "data": [
     {
-      "id": "6849a1f3c2e4d500123abcde",
-      "timestamp": "2026-06-09T14:32:00.000Z",
-      "cnn": { "diagnosi": "V (Ventricolare)", "confidenza": 0.9123, "..." },
-      "rf":  { "diagnosi": "N (Normale)",      "confidenza": 0.8800, "..." },
+      "id": "6650a1b2c3d4e5f6a7b8c9d0",
+      "timestamp": "2026-06-08T14:32:10.123Z",
+      "cnn": { "diagnosi": "V (Ventricolare)", "confidenza": 0.91, "...": "..." },
+      "rf":  { "diagnosi": "N (Normale)",      "confidenza": 0.87, "...": "..." },
       "ground_truth": "V (Ventricolare)"
     }
   ]
 }
 ```
 
+#### `GET /history/{prediction_id}`
+
+Ritorna una singola predizione per ID, **incluso il segnale grezzo decifrato**. Utile per il ricaricamento di un segnale dallo storico direttamente nell'interfaccia.
+
+**Path parameter:** `prediction_id` — ObjectId MongoDB (stringa esadecimale a 24 caratteri).
+
+**Response `200 OK`:** stesso schema di `/history/` con l'aggiunta del campo `signal` (array di 187 float).
+
+**Response `404 Not Found`:** `{ "detail": "Predizione non trovata" }`
+
 #### `GET /history/random`
 
-Ritorna un campione casuale dalla collection `ecg_samples` (dataset MIT-BIH seed), con segnale decifrato e ground truth. Usato dal frontend per la modalità "Esempio casuale". Richiede che il seed sia stato eseguito (vedi sezione 9.3).
+Restituisce un segnale ECG casuale dalla collection `ecg_samples` (dataset MIT-BIH), con il relativo ground truth. Usato dal frontend per la modalità "Esempio casuale".
 
 **Response `200 OK`:**
 ```json
 {
-  "id": "6849a1f3c2e4d500123abcde",
-  "signal": [0.123, -0.045, 0.567, "..."],
-  "ground_truth": "N (Normale)"
+  "id": "6650a1b2c3d4e5f6a7b8c9d1",
+  "signal": [0.123, -0.045, "..."],
+  "ground_truth": "S (Sopraventricolare)"
 }
 ```
 
-> **Nota:** se la collection `ecg_samples` è vuota, restituisce `404 Nessun campione disponibile`.
-
-#### `GET /history/{prediction_id}`
-
-Ritorna il dettaglio completo di una singola predizione, **segnale grezzo incluso** (187 float).
+**Response `404 Not Found`:** `{ "detail": "Nessun campione disponibile" }` — indica che il seed non è stato eseguito.
 
 #### `GET /health`
 
@@ -344,28 +366,42 @@ Ritorna il dettaglio completo di una singola predizione, **segnale grezzo inclus
 ```
 
 ---
-
 ## 8. Frontend: Interfaccia Web
 
-Single-page application statica servita da Nginx. Nessun framework JS — vanilla HTML/CSS/JS per massima portabilità e latenza minima.
+L'interfaccia è una Single Page Application servita da Nginx, accessibile via browser senza installazioni aggiuntive. È strutturata in due tab principali: **Predizione** e **Storico**.
 
-### Tab Predizione
+### 8.1 Modalità di input
 
-Tre modalità di input del segnale ECG:
+Il sistema supporta tre modalità di caricamento del segnale ECG:
 
-- **Manuale** — textarea per incollare 187 valori separati da virgola/spazio/punto e virgola. Contatore campioni in tempo reale con anteprima del tracciato ECG su canvas. Il campo Ground Truth non è disponibile in questa modalità: i valori inseriti manualmente non hanno un'etichetta reale associata.
-- **CSV** — drag & drop o selezione file. Supporta la prima riga del formato MIT-BIH standard (188 valori: i 187 campioni + etichetta di classe). L'etichetta viene estratta automaticamente dall'88° valore e popola il campo Ground Truth come testo fisso non modificabile.
-- **Esempio casuale** — recupera un segnale reale dalla collection `ecg_samples` (dataset MIT-BIH completo, ~21.000 campioni) tramite `GET /history/random`. Il ground truth viene caricato automaticamente e mostrato come testo fisso non modificabile.
+**Input manuale** — inserimento diretto di 187 valori float separati da virgola, con contatore campioni in tempo reale e anteprima grafica del tracciato ECG aggiornata live.
 
-Il campo **Ground Truth** è sempre in sola lettura: non è mai un dropdown ne un campo editabile. Mostra "Non disponibile" per l'input manuale, e la classe reale estratta automaticamente per CSV e esempio casuale. Dopo la classificazione, un banner mostra se CNN e RF hanno classificato correttamente rispetto alla classe reale nota.
+![Caricamento manuale](docs/caricamento-manuale.png)
 
-Per ogni predizione vengono mostrati: diagnosi principale, confidenza con barra animata, stato di affidabilità (badge verde/rosso), distribuzione di probabilità sulle 5 classi e banner di accordo/disaccordo diagnostico tra CNN e RF.
+**Upload CSV** — trascinamento o selezione di un file `.csv` compatibile con il formato MIT-BIH. Se il file contiene 188 valori (187 campioni + etichetta), la classe reale viene estratta automaticamente e mostrata nel badge **Ground Truth**, senza possibilità di modifica manuale.
 
-### Tab Storico
+![Caricamento CSV](docs/caricamento-csv.png)
 
-Lista paginata delle predizioni precedenti con timestamp, diagnosi CNN e RF, confidenze e ground truth (se disponibile). Pulsante di aggiornamento manuale.
+**Esempio casuale** — estrazione di un segnale casuale dalla collection `ecg_samples` del database (popolata dal seed MIT-BIH), con ground truth già associata.
+
+![Estrazione random](docs/estrazione-random.png)
+
+### 8.2 Risultati diagnostici
+
+Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e Random Forest: diagnosi, confidenza con barra grafica, distribuzione di probabilità sulle 5 classi e badge di affidabilità. Un banner segnala l'accordo o il disaccordo tra i due modelli; se il ground truth è disponibile, un secondo banner confronta le predizioni con la classe reale.
+
+![Esempio predizione](docs/esempio-predizione.png)
+
+> Il modulo **Stato Affidabilità** segnala proattivamente la necessità di revisione clinica quando la confidenza scende sotto la soglia del 60%, prevenendo l'*automation bias* in caso di predizioni incerte.
+
+### 8.3 Storico predizioni
+
+Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate dalla più recente, con timestamp, diagnosi CNN e RF, livelli di confidenza e ground truth (se disponibile). I dati vengono decifrati on-the-fly dall'history-service prima di essere inviati al frontend: il segnale grezzo è escluso dalla lista per alleggerire la risposta.
+
+![Storico predizioni](docs/storico-predizioni.png)
 
 ---
+
 
 ## 9. Guida all'Installazione
 
