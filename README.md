@@ -77,7 +77,6 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 
 Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
 
-## 3. Architettura del Sistema e Sicurezza (ALDE)
 
 ```mermaid
 graph TD
