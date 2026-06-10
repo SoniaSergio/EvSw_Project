@@ -2,7 +2,6 @@
 
 ![Deploy](https://img.shields.io/badge/Deploy-ecg.heremy.link-brightgreen)
 ![Docker](https://img.shields.io/badge/Docker-Supported-blue)
-![Python](https://img.shields.io/badge/Python-3.10-blue)
 
 > **Classificazione Automatica delle Aritmie ECG**
 > *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
@@ -76,8 +75,9 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 ## 3. Architettura del Sistema e Sicurezza (ALDE)
 
 Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+
 <p align="center">
-  <img src="./docs/architettura.svg" width="800" alt="Architettura a Microservizi ECG">
+  <img src="docs/architettura.svg" width="800" alt="Architettura a Microservizi ECG">
 </p>
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.

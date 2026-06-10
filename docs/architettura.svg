@@ -1,29 +1,15 @@
 graph TD
-    subgraph Client
-        Browser[Browser Client]
-    end
-
-    subgraph Backend_Services[Microservices]
-        Nginx[Nginx Reverse Proxy]
-        PredService[Prediction Service - FastAPI]
-        HistService[History Service - FastAPI]
-    end
-
-    subgraph Security[Security Layer - ALDE]
-        Fernet[Fernet Encryption AES-256]
-    end
-
-    subgraph Storage[Data Layer]
-        MongoDB[(MongoDB)]
-    end
-
-    Browser -- HTTPS -- Nginx
-    Nginx -- apipredict -- PredService
-    Nginx -- apihistory -- HistService
+    User((Utente)) --> Browser[Browser Client]
     
-    PredService -- Encrypt -- Fernet
-    Fernet -- Save -- MongoDB
+    subgraph "Docker Network (ecg-net)"
+        Browser --> Nginx[Nginx Reverse Proxy]
+        Nginx --> Pred[Prediction Service - FastAPI]
+        Nginx --> Hist[History Service - FastAPI]
+        
+        Pred --> Security[ALDE Encryption Layer]
+        Security --> Mongo[(MongoDB)]
+        Hist --> Security
+    end
     
-    MongoDB -- Read -- HistService
-    HistService -- Decrypt -- Fernet
-    Fernet -- Plain Data -- HistService
+    style Security fill:#f9f,stroke:#333,stroke-width:2px
+    style Mongo fill:#e1f5fe,stroke:#01579b
