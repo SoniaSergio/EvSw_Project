@@ -1,5 +1,9 @@
 # ECG Arrhythmia Classifier
 
+![Deploy](https://img.shields.io/badge/Deploy-ecg.heremy.link-brightgreen)
+![Docker](https://img.shields.io/badge/Docker-Supported-blue)
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+
 > **Classificazione Automatica delle Aritmie ECG**
 > *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
 
@@ -69,61 +73,15 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 | **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da dataset MIT-BIH |
 
 ---
-
 ## 3. Architettura del Sistema e Sicurezza (ALDE)
 
 Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+<p align="center">
+  <img src="./docs/architettura.svg" width="800" alt="Architettura a Microservizi ECG">
+</p>
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
-```text
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                        CLIENT BROWSER                           │
-  └───────────────────────────┬─────────────────────────────────────┘
-                              │ HTTPS :443  (TLS 1.3, Let's Encrypt)
-  ┌───────────────────────────▼─────────────────────────────────────┐
-  │                    FRONTEND  (Nginx :80/:443)                   |
-  │         Serve HTML/CSS/JS statici · Redirect HTTP→HTTPS         │
-  │              Reverse proxy: /api/predict/ · /api/history/       │
-  └──────────────────┬──────────────────────┬───────────────────────┘
-                     │                      │
-         POST /api/predict/      GET /api/history/
-                     │                      │
-  ┌──────────────────▼──────┐   ┌───────────▼──────────────────────┐
-  │   PREDICTION SERVICE    │   │        HISTORY SERVICE           │
-  │   (FastAPI :8000)       │   │        (FastAPI :8001)           │
-  │                         │   │                                  │
-  │  1. Inferenza CNN 1D    │   │  1. Legge doc cifrato da MongoDB │
-  │  2. Inferenza RF        │   │  2. Decifra in RAM (Fernet)      │
-  │  3. Cifra risultati     │   │  3. Restituisce JSON in chiaro   │
-  │     + segnale (Fernet)  │   │     al frontend                  │
-  │  4. Salva su MongoDB    │   │                                  │
-  └──────────┬──────────────┘   └────────────────┬─────────────────┘
-             │                                   │
-             │          ╔═════════════╗          │
-             │          ║  ALDE       ║          │
-             └──────────╢  BOUNDARY   ╟──────────┘
-                        ║  (tutti i   ║
-                        ║  dati sono  ║
-                        ║  cifrati)   ║
-                        ╚══════╤══════╝
-                               │
-  ┌────────────────────────────▼────────────────────────────────────┐
-  │                     MONGODB  :27017                             │
-  │  Database: ecgdb                                                │
-  │  ├── predictions   { signal🔒, cnn🔒, rf🔒, ground_truth🔒 }  │
-  │  └── ecg_samples   { signal_encrypted🔒, ground_truth, source} │
-  └─────────────────────────────────────────────────────────────────┘
-
-  ┌─────────────────────────────────────────────────────────────────┐
-  │  SEED  (one-shot, restart: "no")                                │
-  │  Popola ecg_samples con i campioni MIT-BIH cifrati al primo     │
-  │  avvio. Si arresta automaticamente dopo l'inserimento.          │
-  └─────────────────────────────────────────────────────────────────┘
-
-  Tutti i servizi comunicano esclusivamente su: ecg-net (bridge)
-  MongoDB non espone porte verso l'host.
-```
 
 ### Flusso di una predizione
 

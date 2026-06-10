@@ -1,0 +1,29 @@
+graph TD
+    subgraph Client
+        Browser[Browser Client]
+    end
+
+    subgraph Backend_Services[Microservices]
+        Nginx[Nginx Reverse Proxy]
+        PredService[Prediction Service - FastAPI]
+        HistService[History Service - FastAPI]
+    end
+
+    subgraph Security[Security Layer - ALDE]
+        Fernet[Fernet Encryption AES-256]
+    end
+
+    subgraph Storage[Data Layer]
+        MongoDB[(MongoDB)]
+    end
+
+    Browser -- HTTPS -- Nginx
+    Nginx -- apipredict -- PredService
+    Nginx -- apihistory -- HistService
+    
+    PredService -- Encrypt -- Fernet
+    Fernet -- Save -- MongoDB
+    
+    MongoDB -- Read -- HistService
+    HistService -- Decrypt -- Fernet
+    Fernet -- Plain Data -- HistService
