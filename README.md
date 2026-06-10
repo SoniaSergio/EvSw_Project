@@ -77,11 +77,13 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 
 Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
 
+## 3. Architettura del Sistema e Sicurezza (ALDE)
+
 ```mermaid
 graph TD
     User((Utente)) --> Browser[Browser Client]
     
-    subgraph "Docker Network (ecg-net)"
+    subgraph "Docker Network ecg-net"
         Browser --> Nginx[Nginx Reverse Proxy]
         Nginx --> Pred[Prediction Service - FastAPI]
         Nginx --> Hist[History Service - FastAPI]
@@ -93,6 +95,8 @@ graph TD
 
     style Security fill:#f9f,stroke:#333,stroke-width:2px
     style Mongo fill:#e1f5fe,stroke:#01579b
+  
+  ```
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
