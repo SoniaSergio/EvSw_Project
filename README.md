@@ -29,7 +29,7 @@
 
 **ECG Arrhythmia Classifier** è un sistema web di supporto diagnostico per la classificazione automatica delle aritmie cardiache a partire da segnali ECG del dataset standard **MIT-BIH Arrhythmia Database** (87.554 campioni, 5 classi, 360 Hz).
 
-Dal punto di vista dell'Ingegneria del Software, questo sistema è concepito non solo come un progetto isolato, ma come un vero e proprio **prodotto software**: un sistema generico nato per cogliere un'opportunità di business (il supporto clinico rapido) in grado di fornire funzionalità utili a una vasta gamma di utenti medici, garantendo scalabilità e manutenibilità a lungo termine.
+Dal punto di vista dell'Ingegneria del Software, questo sistema è concepito non solo come un progetto isolato, ma come un vero e proprio prodotto software: un sistema generico nato per cogliere un'opportunità di business (il supporto clinico rapido) in grado di fornire funzionalità utili a una vasta gamma di utenti medici, garantendo scalabilità e manutenibilità a lungo termine.
 
 Il progetto mette a confronto due paradigmi opposti di machine learning:
 
@@ -39,9 +39,11 @@ Il progetto mette a confronto due paradigmi opposti di machine learning:
 La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante dell'accuracy globale in presenza di forte sbilanciamento.
 
 | Modello | Accuracy | Macro Recall | Macro F1 | AUC |
-|:---|:---:|:---:|:---:|:---:|
+|:---:|:---:|:---:|:---:|:---:|
 | Random Forest | 0.83 | 0.69 | 0.57 | 0.903 |
-| **CNN 1D** | **0.96** | **0.92** | **0.82** | **0.989** |
+| CNN 1D | 0.96 | 0.92 | 0.82 | 0.989 |
+
+> La CNN 1D ottiene risultati superiori in tutte le metriche.
 
 La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispetto alla RF (Recall: 0.60 → 0.91), la classe a maggiore rischio clinico per il paziente.
 
@@ -49,7 +51,7 @@ La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispett
 
 ## 2. Evoluzione Architetturale: da Gradio a Microservizi
 
-Il progetto nasce come prototipo monolitico sviluppato originariamente per l'esame, in cui i modelli erano incapsulati in un'interfaccia interattiva **Gradio** eseguita localmente su Google Colab.
+Il progetto nasce come prototipo monolitico in cui i modelli erano incapsulati in un'interfaccia interattiva **Gradio** eseguita localmente su Google Colab.
 
 Questa versione rappresenta la sua **evoluzione in un sistema distribuito**, riprogettato secondo la definizione formale **IEEE di Architettura Software**: *"L'organizzazione fondamentale di un sistema sw che si concretizza nei suoi componenti, nelle loro relazioni reciproche e con l'ambiente e nei principi che ne guidano la progettazione e l'evoluzione"*.
 
@@ -62,9 +64,9 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 | **Persistenza** | Nessuna | MongoDB: storico completo e cifrato |
 | **Architettura** | Monolitica, single-process | 4 servizi indipendenti dockerizzati |
 | **Inferenza** | Sincrona, single-thread | FastAPI async, latenza media < 200 ms |
-| **Scalabilità** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
+| **Scalabilita** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
 | **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + **Cifratura AES-256 (ALDE)** nel DB |
-| **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da storico |
+| **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da dataset MIT-BIH |
 
 ---
 
@@ -72,7 +74,7 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 
 Il sistema è composto da **4 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`). I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
 
-Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico in chiaro risiede nel database: il Service Layer cifra e decifra i dati asincronamente utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)** prima di interagire con MongoDB (garantendo il principio di *Encryption at Rest* e un disaccoppiamento logico perfetto).
+Per garantire l'assoluta confidenzialita dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico in chiaro risiede nel database: il Service Layer cifra e decifra i dati asincronamente utilizzando l'algoritmo **AES-256 in modalita CBC/HMAC (Fernet)** prima di interagire con MongoDB (garantendo il principio di *Encryption at Rest* e un disaccoppiamento logico perfetto).
 
 ```text
                         ┌─────────────────────────────────┐
@@ -99,8 +101,9 @@ Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implem
                               ┌───────────────▼────────────┐
                               │        MongoDB :27017      │
                               │   Database: ecgdb          │
-                              │   Collection: predictions  │
-                              │   (Contiene SOLO dati AES) │
+                              │   Collections:             │
+                              │   - predictions (cifrata)  │
+                              │   - ecg_samples (cifrata)  │
                               └────────────────────────────┘
 ```
 
@@ -123,12 +126,12 @@ Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implem
 | **Frontend** | HTML5 / CSS3 / Vanilla JS | — | Interfaccia utente |
 | **Frontend Server** | Nginx Alpine | 1.27 | Serve statico + reverse proxy |
 | **Prediction API** | FastAPI + Uvicorn | 0.111 / 0.30 | Inferenza CNN e RF |
-| **History API** | FastAPI + Uvicorn | 0.115 / 0.32 | CRUD storico predizioni |
+| **History API** | FastAPI + Uvicorn | 0.115 / 0.32 | CRUD storico predizioni + campioni casuali |
 | **Deep Learning** | TensorFlow / Keras | 2.16.1 | Modello CNN 1D |
 | **Machine Learning** | Scikit-learn + Joblib | 1.5.0 | Modello Random Forest |
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
 | **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
-| **Database** | MongoDB | 7.0 | Persistenza predizioni + segnali |
+| **Database** | MongoDB | 7.0 | Persistenza predizioni + campioni MIT-BIH |
 | **ODM Asincrono** | Motor + PyMongo | 3.x / 4.x | Driver async MongoDB per FastAPI |
 | **Validazione** | Pydantic | 2.x | Validazione input/output API |
 | **Containerization** | Docker + Docker Compose | — | Orchestrazione servizi |
@@ -149,7 +152,7 @@ ECG-ARRHYTHMIA-/
 │   └── nginx.conf              # Reverse proxy, HTTPS, redirect HTTP→HTTPS
 │
 ├── prediction-service/
-│   ├── models/                 # NON incluso nel repo (vedi sezione 9.2)
+│   ├── models/                 # NON incluso nel repo su GitHub(vedere sezione 9.2)
 │   │   ├── ecg_cnn_model.h5    # Pesi CNN 1D addestrata (TensorFlow/Keras)
 │   │   └── ecg_rf_model.pkl    # Modello Random Forest serializzato (joblib)
 │   ├── routers/
@@ -159,23 +162,28 @@ ECG-ARRHYTHMIA-/
 │   │   ├── rf_service.py
 │   │   └── db_service.py       # Cifratura Fernet e save_prediction()
 │   ├── main.py
-│   ├── requirements.txt        # Include cryptography==42.0.5
+│   ├── requirements.txt
 │   └── Dockerfile
 │
 ├── history-service/
 │   ├── routers/
-│   │   └── history.py
+│   │   └── history.py          # GET /history/, /history/random, /history/{id}
 │   ├── services/
-│   │   └── db_service.py       # Decifratura on-the-fly e get_predictions()
+│   │   └── db_service.py       # Decifratura on-the-fly, get_predictions(), get_random_ecg_sample()
 │   ├── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
+│
+├── seed/
+│   ├── Dockerfile              # Immagine Python con pandas, pymongo, cryptography
+│   ├── seed_db.py              # Script di popolamento collection ecg_samples
+│   └── mitbih_test.csv         # NON incluso nel repo (vedere sezione 9.3)
 │
 ├── mongo/
 │   └── init/
 │       └── init.js             # Crea collection predictions + indici MongoDB
 │
-├── docker-compose.yml          # Orchestrazione: mongo, prediction, history, frontend, certbot
+├── docker-compose.yml          # Orchestrazione: mongo, prediction, history, frontend, certbot, seed
 ├── .env                        # Variabili d'ambiente REALI (non committato)
 ├── .env.example                # Template variabili (committato)
 └── .gitignore
@@ -200,10 +208,10 @@ Input (187, 1)
     ↓
 Flatten → Dense(64, ReLU) → Dense(5, Softmax)
     ↓
-Output: distribuzione di probabilità sulle 5 classi
+Output: distribuzione di probabilita sulle 5 classi
 ```
 
-**Configurazione di addestramento:** ottimizzatore Adam (lr=0.0001), categorical cross-entropy, Early Stopping (patience=5, monitora `val_loss`), convergenza ottimale all'epoca 6.
+**Configurazione di addestramento:** ottimizzatore Adam (learning rate=0.0001), categorical cross-entropy, Early Stopping (patience=5, monitora `val_loss`), convergenza ottimale all'epoca 6.
 
 **Class weights** (inversamente proporzionali alla frequenza nel training set):
 
@@ -217,15 +225,15 @@ Output: distribuzione di probabilità sulle 5 classi
 
 ### 6.2 Random Forest
 
-150 alberi, profondità massima 15, `class_weight='balanced'`. Opera su **9 feature morfologiche** estratte per ogni battito di 187 campioni: media, deviazione standard, skewness, kurtosis, valore massimo, valore minimo, range, energia, zero-crossing rate.
+150 alberi, profondità massima 15, iperparametro nativo `class_weight='balanced'`. Opera su **9 feature morfologiche** estratte per ogni battito di 187 campioni: media, deviazione standard, skewness, kurtosis, valore massimo, valore minimo, range, energia, zero-crossing rate.
 
-Media, skewness e kurtosis contribuiscono a oltre il 65% della capacità discriminativa (Gini importance), ma soffrono di elevata sovrapposizione distributiva tra le classi N, S e V — limite strutturale che il CNN supera operando localmente sul segnale.
+Media, skewness e kurtosis contribuiscono a oltre il 65% della capacita discriminativa (Gini importance), ma soffrono di elevata sovrapposizione distributiva tra le classi N, S e V — limite strutturale che il modello CNN supera operando localmente sul segnale.
 
-### 6.3 Stato di affidabilità
+### 6.3 Stato di affidabilita
 
-Entrambi i modelli espongono uno **stato di affidabilità** basato su soglia fissa:
+Entrambi i modelli espongono uno **stato di affidabilita** basato su soglia fissa:
 
-- **Confidenza ≥ 0.60** → `"Diagnosi ad alta confidenza"`
+- **Confidenza >= 0.60** → `"Diagnosi ad alta confidenza"`
 - **Confidenza < 0.60** → `"Bassa confidenza (Revisione clinica raccomandata)"`
 
 ---
@@ -283,14 +291,14 @@ Esegue l'inferenza parallela con CNN 1D e RF sul segnale ECG fornito. Salva il r
 
 #### `GET /history/`
 
-Ritorna le ultime predizioni salvate, ordinate dalla più recente. Il segnale grezzo è escluso dalla lista per alleggerire la risposta.
+Ritorna le ultime predizioni salvate, ordinate dalla piu recente. Il segnale grezzo e escluso dalla lista per alleggerire la risposta.
 
 **Query parameters:**
 
 | Parametro | Tipo | Default | Range | Descrizione |
 |:---|:---|:---:|:---:|:---|
-| `limit` | int | 50 | 1–200 | Numero massimo di record da restituire |
-| `skip` | int | 0 | ≥ 0 | Offset per la paginazione |
+| `limit` | int | 50 | 1-200 | Numero massimo di record da restituire |
+| `skip` | int | 0 | >= 0 | Offset per la paginazione |
 
 **Response `200 OK`:**
 ```json
@@ -309,6 +317,21 @@ Ritorna le ultime predizioni salvate, ordinate dalla più recente. Il segnale gr
   ]
 }
 ```
+
+#### `GET /history/random`
+
+Ritorna un campione casuale dalla collection `ecg_samples` (dataset MIT-BIH seed), con segnale decifrato e ground truth. Usato dal frontend per la modalità "Esempio casuale". Richiede che il seed sia stato eseguito (vedi sezione 9.3).
+
+**Response `200 OK`:**
+```json
+{
+  "id": "6849a1f3c2e4d500123abcde",
+  "signal": [0.123, -0.045, 0.567, "..."],
+  "ground_truth": "N (Normale)"
+}
+```
+
+> **Nota:** se la collection `ecg_samples` è vuota, restituisce `404 Nessun campione disponibile`.
 
 #### `GET /history/{prediction_id}`
 
@@ -330,11 +353,11 @@ Single-page application statica servita da Nginx. Nessun framework JS — vanill
 
 Tre modalità di input del segnale ECG:
 
-- **Manuale** — textarea per incollare 187 valori separati da virgola/spazio/punto e virgola. Contatore campioni in tempo reale con anteprima del tracciato ECG su canvas.
-- **CSV** — drag & drop o selezione file. Supporta la prima riga del formato MIT-BIH standard (188 valori: i 187 campioni + etichetta di classe). L'etichetta viene estratta automaticamente e popola il campo Ground Truth.
-- **Esempio casuale** — recupera un segnale reale dallo storico per validazione interattiva. Se il record ha un ground truth salvato, viene caricato automaticamente.
+- **Manuale** — textarea per incollare 187 valori separati da virgola/spazio/punto e virgola. Contatore campioni in tempo reale con anteprima del tracciato ECG su canvas. Il campo Ground Truth non è disponibile in questa modalità: i valori inseriti manualmente non hanno un'etichetta reale associata.
+- **CSV** — drag & drop o selezione file. Supporta la prima riga del formato MIT-BIH standard (188 valori: i 187 campioni + etichetta di classe). L'etichetta viene estratta automaticamente dall'88° valore e popola il campo Ground Truth come testo fisso non modificabile.
+- **Esempio casuale** — recupera un segnale reale dalla collection `ecg_samples` (dataset MIT-BIH completo, ~21.000 campioni) tramite `GET /history/random`. Il ground truth viene caricato automaticamente e mostrato come testo fisso non modificabile.
 
-Il campo **Ground Truth** si comporta in modo intelligente: si auto-popola (badge verde "✓ Auto") quando il segnale proviene da CSV con etichetta o da un record dello storico, e rimane modificabile manualmente. Dopo la classificazione, un banner mostra se CNN e RF hanno classificato correttamente rispetto alla classe reale nota.
+Il campo **Ground Truth** è sempre in sola lettura: non è mai un dropdown ne un campo editabile. Mostra "Non disponibile" per l'input manuale, e la classe reale estratta automaticamente per CSV e esempio casuale. Dopo la classificazione, un banner mostra se CNN e RF hanno classificato correttamente rispetto alla classe reale nota.
 
 Per ogni predizione vengono mostrati: diagnosi principale, confidenza con barra animata, stato di affidabilità (badge verde/rosso), distribuzione di probabilità sulle 5 classi e banner di accordo/disaccordo diagnostico tra CNN e RF.
 
@@ -370,7 +393,34 @@ I file da scaricare sono:
 
 **Passaggio 2:** Posiziona i file nella cartella `prediction-service/models/`. In locale puoi trascinarli manualmente. Su un server remoto (es. Oracle Cloud) usa un client SFTP come MobaXterm: trascina l'intera cartella `models/` nel pannello file a sinistra, navigando fino a `~/EvSw_Project/prediction-service/`.
 
-### 9.3 Avvio in ambiente locale (HTTP)
+### 9.3 Seed del Dataset MIT-BIH
+
+La funzionalità "Esempio casuale" richiede che la collection `ecg_samples` di MongoDB sia popolata con i campioni del test set MIT-BIH (~21.000 battiti etichettati). Il file CSV non è incluso nel repository per ragioni di dimensione.
+
+**Passaggio 1:** Scarica `mitbih_test.csv` da Kaggle dal dataset originale al link seguente: https://www.kaggle.com/datasets/shayanfazeli/heartbeat?select=mitbih_test.csv 
+
+**Passaggio 2:** Carica il file nella cartella `seed/`:
+```
+~/EvSw_Project/seed/mitbih_test.csv
+```
+
+**Passaggio 3:** Esegui il seed (va fatto una sola volta — lo script rileva automaticamente se la collection è gia popolata e non reinserisce):
+
+```bash
+cd ~/EvSw_Project
+docker compose build seed
+docker compose up seed
+```
+
+Attendere il messaggio: `Inseriti X campioni in ecg_samples.`
+
+**Verifica:**
+```bash
+docker exec -it ecg-mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
+```
+Deve restituire circa 21.000.
+
+### 9.4 Avvio in ambiente locale (HTTP)
 
 Il file `nginx.conf` incluso nel repository è configurato per la produzione con HTTPS e dominio reale. Per eseguire il progetto in locale, sostituisci temporaneamente il contenuto di `frontend/nginx.conf` con la seguente versione HTTP:
 
@@ -403,7 +453,7 @@ docker compose up -d
 
 Il frontend sarà accessibile su `http://localhost`.
 
-### 9.4 Avvio in produzione (HTTPS con Let's Encrypt)
+### 9.5 Avvio in produzione (HTTPS con Let's Encrypt)
 
 Il setup HTTPS richiede un dominio reale con record DNS che punta all'IP del server e le porte 80/443 aperte.
 
@@ -424,7 +474,7 @@ nano .env
 # Inserisci ENCRYPTION_KEY, MONGO_URI e CERTBOT_PATH=/etc/letsencrypt
 ```
 
-**Passaggio 3:** Carica i modelli nella cartella `prediction-service/models/` via SFTP (vedi sezione 9.2).
+**Passaggio 3:** Carica i modelli nella cartella `prediction-service/models/`.
 
 **Passaggio 4:** Crea le cartelle per Certbot sul server host:
 
@@ -467,9 +517,11 @@ docker run --rm \
 docker compose up -d
 ```
 
+**Passaggio 9:** Esegui il seed del dataset MIT-BIH (vedi sezione 9.3).
+
 Il sistema sarà raggiungibile su `https://tuo-dominio.com`.
 
-### 9.5 Verifica dello stato dei servizi
+### 9.6 Verifica dello stato dei servizi
 
 ```bash
 # Stato container
@@ -477,6 +529,7 @@ docker compose ps
 
 # Log in tempo reale
 docker compose logs -f prediction-service
+docker compose logs -f history-service
 ```
 
 ---
@@ -512,6 +565,14 @@ db.predictions.find().sort({_id: -1}).limit(1).pretty()
 
 Nota: I campi `signal`, `cnn`, `rf` e `ground_truth` appariranno come stringhe cifrate (es: `gAAAAA...`), confermando che il pattern ALDE impedisce l'accesso ai dati clinici sensibili anche in caso di compromissione del database.
 
+Per verificare la cifratura anche sulla collection `ecg_samples`:
+
+```javascript
+db.ecg_samples.findOne()
+```
+
+Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground_truth` e `source` sono in chiaro (metadati non sensibili).
+
 ---
 
 ## 12. Risoluzione Problemi (Troubleshooting)
@@ -528,19 +589,21 @@ Nota: I campi `signal`, `cnn`, `rf` e `ground_truth` appariranno come stringhe c
 | **`cryptography` / `libgomp1` not found** | Dipendenze mancanti nell'immagine compilata | Eseguire `docker compose build --no-cache`. |
 | **`permission denied` su docker** | Utente non nel gruppo docker | Eseguire `sudo usermod -aG docker $USER` seguito da `newgrp docker`. |
 | **Certbot: `unauthorized` / 404** | Le cartelle `/var/www/certbot` o `/etc/letsencrypt` non esistono sull'host | Eseguire `sudo mkdir -p /var/www/certbot && sudo mkdir -p /etc/letsencrypt` e riavviare il frontend prima di rieseguire Certbot. |
+| **"Nessun campione disponibile" su Esempio casuale** | La collection `ecg_samples` è vuota | Caricare `mitbih_test.csv` in `seed/` via SFTP e lanciare `docker compose build seed && docker compose up seed`. |
+| **Seed: `SyntaxError Non-UTF-8`** | Il file `seed_db.py` contiene caratteri accentati o non ASCII | Riscrivere il file dal server con `cat > seed_db.py << 'EOF'` evitando caratteri non ASCII nel testo. |
 
 ---
 
 ## 13. Riferimenti Scientifici
 
-- **[MIT-BIH Arrhythmia Database]** G. B. Moody, R. G. Mark — *"The impact of the MIT-BIH arrhythmia database"*, IEEE Engineering in Medicine and Biology Magazine, vol. 20, no. 3, pp. 45–50, 2001.
+- **[MIT-BIH Arrhythmia Database]** G. B. Moody, R. G. Mark — *"The impact of the MIT-BIH arrhythmia database"*, IEEE Engineering in Medicine and Biology Magazine, vol. 20, no. 3, pp. 45-50, 2001.
 
-- **[Kailan et al., 2025]** — *"Efficient ECG classification based on machine learning and feature selection algorithm for IoT-5G enabled health monitoring systems"*, International Journal of Intelligent Engineering and Systems, vol. 18, no. 1, pp. 1187–1199. *(Approccio PSO + SVM, baseline ML classico)*
+- **[Kailan et al., 2025]** — *"Efficient ECG classification based on machine learning and feature selection algorithm for IoT-5G enabled health monitoring systems"*, International Journal of Intelligent Engineering and Systems, vol. 18, no. 1, pp. 1187-1199.
 
-- **[Mohebbanaaz et al., 2025]** — *"A novel inference system for detecting cardiac arrhythmia using deep learning framework"*, Neural Computing and Applications, vol. 37, no. 16, pp. 9759–9775. *(DeepBiLSTMnet — confronto architetture ricorrenti)*
+- **[Mohebbanaaz et al., 2025]** — *"A novel inference system for detecting cardiac arrhythmia using deep learning framework"*, Neural Computing and Applications, vol. 37, no. 16, pp. 9759-9775.
 
-- **[Zhang et al., 2025]** — *"MSFT: A multi-scale feature-based transformer model for arrhythmia classification"*, Biomedical Signal Processing and Control, vol. 100. *(Architettura ibrida CNN + Transformer — confronto complessità)*
+- **[Zhang et al., 2025]** — *"MSFT: A multi-scale feature-based transformer model for arrhythmia classification"*, Biomedical Signal Processing and Control, vol. 100.
 
 ---
 
-*Evoluzione del Software 2025/2026 · Università degli Studi di Bari Aldo Moro · Sonia Sergio, 796129*
+*Evoluzione del Software 2025/2026 · Universita degli Studi di Bari Aldo Moro · Sonia Sergio, 796129*
