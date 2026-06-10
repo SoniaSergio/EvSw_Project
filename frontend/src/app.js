@@ -11,7 +11,7 @@ const CLASS_COLORS = {
 };
 const DEFAULT_COLOR = '#6b7280';
 
-// Mappa etichetta numerica MIT-BIH → stringa
+// Mappa etichetta numerica MIT-BIH → stringa leggibile
 const MIT_LABEL_MAP = {
   '0': 'N (Normale)',
   '1': 'S (Sopraventricolare)',
@@ -20,32 +20,30 @@ const MIT_LABEL_MAP = {
   '4': 'Q (Non classificabile)',
 };
 
-/* ── Helpers ground truth ────────────────────────────────────────────────── */
-function setGroundTruth(value, source) {
-  const sel   = document.getElementById('ground-truth-input');
-  const badge = document.getElementById('gt-source-badge');
+/* ── Stato ground truth corrente ─────────────────────────────────────────── */
+// Stringa o null — viene passato all'API e usato nel banner risultati
+let currentGroundTruth = null;
 
-  // Normalizza da indice numerico MIT-BIH a stringa leggibile
-  const normalized = MIT_LABEL_MAP[String(value)] || value || 'Non specificato';
+function setGroundTruth(value) {
+  // Normalizza: se è un numero MIT-BIH (es. "2") → stringa leggibile
+  const normalized = MIT_LABEL_MAP[String(value)] || value || null;
+  currentGroundTruth = normalized;
 
-  for (let i = 0; i < sel.options.length; i++) {
-    if (sel.options[i].value === normalized) {
-      sel.selectedIndex = i;
-      break;
-    }
-  }
-
-  if (source === 'auto') {
-    badge.textContent = '✓ Auto';
+  const badge = document.getElementById('gt-value');
+  if (normalized) {
+    badge.textContent = normalized;
     badge.className   = 'gt-badge gt-auto';
   } else {
-    badge.textContent = 'Manuale';
+    badge.textContent = 'Non disponibile';
     badge.className   = 'gt-badge';
   }
 }
 
-function resetGroundTruth() {
-  setGroundTruth('Non specificato', 'manual');
+function clearGroundTruth() {
+  currentGroundTruth = null;
+  const badge = document.getElementById('gt-value');
+  badge.textContent = 'Non disponibile';
+  badge.className   = 'gt-badge';
 }
 
 /* ── Nav / tabs ──────────────────────────────────────────────────────────── */
@@ -67,12 +65,8 @@ document.querySelectorAll('.input-tab').forEach(tab => {
     document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById('input-' + tab.dataset.input).classList.add('active');
-    // Quando si torna al manuale, reset del badge (non tocca il valore scelto)
-    if (tab.dataset.input === 'manual') {
-      const badge = document.getElementById('gt-source-badge');
-      badge.textContent = 'Manuale';
-      badge.className   = 'gt-badge';
-    }
+    // Quando si torna al manuale, il ground truth non è disponibile
+    if (tab.dataset.input === 'manual') clearGroundTruth();
   });
 });
 
@@ -97,7 +91,11 @@ const csvInput = document.getElementById('csv-file');
 
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  handleFile(e.dataTransfer.files[0]);
+});
 csvInput.addEventListener('change', () => handleFile(csvInput.files[0]));
 
 function handleFile(file) {
@@ -108,14 +106,14 @@ function handleFile(file) {
     let vals = line.split(/[\s,;]+/).map(Number).filter(v => !isNaN(v) && String(v) !== '');
     let label = null;
     if (vals.length === 188) {
-      label = String(vals[187]);   // 188° valore = etichetta MIT-BIH
+      label = String(vals[187]);  // 188° valore = etichetta MIT-BIH (0-4)
       vals  = vals.slice(0, 187);
     }
     if (vals.length === 187) {
       setSignalNoTabSwitch(vals);
       dropZone.querySelector('.drop-text').textContent = `✓ ${file.name} caricato (187 campioni)`;
-      if (label !== null) setGroundTruth(label, 'auto');
-      else resetGroundTruth();
+      if (label !== null) setGroundTruth(label);
+      else clearGroundTruth();
     } else {
       alert(`Attese 187 valori, trovati ${vals.length}. Controlla il file.`);
     }
@@ -126,31 +124,14 @@ function handleFile(file) {
 /* ── Random signal ───────────────────────────────────────────────────────── */
 document.getElementById('btn-random').addEventListener('click', async () => {
   try {
-    const res = await fetch(HISTORY_URL + '?limit=100&_=' + new Date().getTime());
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-
-    if (data.data && data.data.length > 0) {
-      const randomItem = data.data[Math.floor(Math.random() * data.data.length)];
-      const detailRes  = await fetch(`${HISTORY_URL}${randomItem.id}`);
-      const detail     = await detailRes.json();
-
-      if (detail.signal) {
-        setSignalNoTabSwitch(detail.signal);
-        // Se il record ha un ground_truth salvato, usalo
-        if (detail.ground_truth && detail.ground_truth !== 'Non specificato') {
-          setGroundTruth(detail.ground_truth, 'auto');
-        } else {
-          resetGroundTruth();
-        }
-      }
-    } else {
-      setSignalNoTabSwitch(generateDemoSignal());
-      resetGroundTruth();
-    }
-  } catch {
-    setSignalNoTabSwitch(generateDemoSignal());
-    resetGroundTruth();
+    const res = await fetch('/api/history/random');
+    if (!res.ok) throw new Error('Nessun campione disponibile');
+    const detail = await res.json();
+    setSignalNoTabSwitch(detail.signal);
+    if (detail.ground_truth) setGroundTruth(detail.ground_truth);
+    else clearGroundTruth();
+  } catch (err) {
+    alert('Errore: ' + err.message);
   }
 });
 
@@ -177,8 +158,8 @@ function setSignal(vals, gt) {
   document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('active'));
   document.querySelector('[data-input="manual"]').classList.add('active');
   document.getElementById('input-manual').classList.add('active');
-  if (gt) setGroundTruth(gt, 'auto');
-  else resetGroundTruth();
+  if (gt) setGroundTruth(gt);
+  else clearGroundTruth();
 }
 
 function setSignalNoTabSwitch(vals) {
@@ -230,9 +211,7 @@ const btnPredict = document.getElementById('btn-predict');
 btnPredict.addEventListener('click', runPrediction);
 
 async function runPrediction() {
-  const vals    = parseSignalText(signalText.value);
-  const gtInput = document.getElementById('ground-truth-input');
-  const gtValue = gtInput ? gtInput.value : 'Non specificato';
+  const vals = parseSignalText(signalText.value);
 
   if (vals.length !== 187) {
     alert('Inserisci esattamente 187 campioni numerici.');
@@ -241,14 +220,17 @@ async function runPrediction() {
 
   setLoading(true);
   try {
+    const body = { signal: vals };
+    if (currentGroundTruth) body.ground_truth = currentGroundTruth;
+
     const res = await fetch(PREDICT_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ signal: vals, ground_truth: gtValue }),
+      body:    JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`Errore ${res.status}`);
     const data = await res.json();
-    renderResults(data, gtValue);
+    renderResults(data, currentGroundTruth);
   } catch (err) {
     alert('Errore durante la predizione: ' + err.message);
   } finally {
@@ -280,16 +262,16 @@ function renderResults(data, groundTruth) {
     banner.textContent = `⚠ Disaccordo diagnostico — CNN: ${cnnDiag}  ·  RF: ${rfDiag}`;
   }
 
-  // Banner ground truth vs predizioni
+  // Banner ground truth vs predizioni (solo se GT disponibile)
   const gtBanner = document.getElementById('gt-result-banner');
-  if (groundTruth && groundTruth !== 'Non specificato') {
+  if (groundTruth) {
     const cnnOk = cnnDiag === groundTruth;
     const rfOk  = rfDiag  === groundTruth;
-    gtBanner.className   = 'gt-result-banner';
-    gtBanner.innerHTML   =
+    gtBanner.className = 'gt-result-banner';
+    gtBanner.innerHTML =
       `<span>GT: <strong>${groundTruth}</strong></span>` +
       `<span>CNN: ${cnnOk ? '✓ Corretta' : '✗ ' + cnnDiag}</span>` +
-      `<span>RF: ${rfOk  ? '✓ Corretta' : '✗ ' + rfDiag}</span>`;
+      `<span>RF:  ${rfOk  ? '✓ Corretta' : '✗ ' + rfDiag}</span>`;
   } else {
     gtBanner.className = 'gt-result-banner hidden';
   }

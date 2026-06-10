@@ -9,7 +9,21 @@ services:
       - mongo_data:/data/db
     networks:
       - ecg-net
-
+      
+  seed:
+    build: ./seed
+    container_name: ecg-seed
+    environment:
+      MONGO_URI: mongodb://mongo:27017/ecgdb
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    volumes:
+      - ./seed/mitbih_test.csv:/data/mitbih_test.csv:ro
+    depends_on:
+      - mongo
+    networks:
+      - ecg-net
+    restart: "no"
+    
   # ── Prediction Service ───────────────────────────────────────────────────────
   prediction-service:
     build: ./prediction-service

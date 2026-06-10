@@ -26,7 +26,6 @@
     </div>
   </header>
 
-  <!-- PREDICT TAB -->
   <main id="tab-predict" class="tab active">
     <div class="container">
 
@@ -66,23 +65,15 @@
         </div>
 
         <div id="input-random" class="input-panel">
-          <p class="random-desc">Carica un segnale casuale dal test set MIT-BIH per validazione.</p>
+          <p class="random-desc">Carica un segnale casuale dal test set MIT-BIH. La classe reale viene mostrata automaticamente.</p>
           <button class="btn btn-outline" id="btn-random">Genera segnale casuale</button>
         </div>
 
-        <!-- Ground Truth: si auto-popola da CSV/random, editabile solo manualmente -->
+        <!-- Ground Truth: testo fisso non modificabile, si auto-popola da CSV/random -->
         <div class="ground-truth-wrap">
           <div class="ground-truth-row">
-            <span class="gt-label-text">GROUND TRUTH</span>
-            <select id="ground-truth-input" class="gt-select">
-              <option value="Non specificato">Non specificato</option>
-              <option value="N (Normale)">N (Normale)</option>
-              <option value="S (Sopraventricolare)">S (Sopraventricolare)</option>
-              <option value="V (Ventricolare)">V (Ventricolare)</option>
-              <option value="F (Fusion)">F (Fusion)</option>
-              <option value="Q (Non classificabile)">Q (Non classificabile)</option>
-            </select>
-            <span class="gt-badge" id="gt-source-badge">Manuale</span>
+            <span class="gt-label-text">CLASSE REALE (GROUND TRUTH)</span>
+            <span id="gt-value" class="gt-badge">Non disponibile</span>
           </div>
         </div>
 
@@ -126,16 +117,13 @@
           </div>
         </div>
 
-        <!-- Banner ground truth confronto con predizioni -->
         <div class="gt-result-banner hidden" id="gt-result-banner"></div>
-
         <div class="agreement-banner" id="agreement-banner"></div>
       </section>
 
     </div>
   </main>
 
-  <!-- HISTORY TAB -->
   <main id="tab-history" class="tab">
     <div class="container">
       <section class="hero hero-sm">

@@ -1,46 +1,30 @@
 # ECG Arrhythmia Classifier
-Classificazione Automatica delle Aritmie ECG
-Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.
 
---- 
-## Indice
+> **Classificazione Automatica delle Aritmie ECG**
+> *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
 
-- [ECG Arrhythmia Classifier](#ecg-arrhythmia-classifier)
-  - [Indice](#indice)
-  - [1. Visione del Progetto e Origine](#1-visione-del-progetto-e-origine)
-  - [2. Evoluzione Architetturale: da Gradio a Microservizi](#2-evoluzione-architetturale-da-gradio-a-microservizi)
-  - [3. Architettura del Sistema e Sicurezza (ALDE)](#3-architettura-del-sistema-e-sicurezza-alde)
-    - [Flusso di una predizione](#flusso-di-una-predizione)
-  - [4. Stack Tecnologico](#4-stack-tecnologico)
-  - [5. Struttura del Progetto](#5-struttura-del-progetto)
-  - [6. I Modelli di Classificazione](#6-i-modelli-di-classificazione)
-    - [6.1 CNN 1D](#61-cnn-1d)
-    - [6.2 Random Forest](#62-random-forest)
-    - [6.3 Stato di affidabilità](#63-stato-di-affidabilità)
-  - [7. API Reference](#7-api-reference)
-    - [Prediction Service (porta 8000)](#prediction-service-porta-8000)
-      - [`POST /predict/`](#post-predict)
-      - [`GET /health`](#get-health)
-    - [History Service (porta 8001)](#history-service-porta-8001)
-      - [`GET /history/`](#get-history)
-      - [`GET /history/{prediction_id}`](#get-historyprediction_id)
-      - [`GET /health`](#get-health-1)
-  - [8. Frontend: Interfaccia Web](#8-frontend-interfaccia-web)
-    - [Tab Predizione](#tab-predizione)
-    - [Tab Storico](#tab-storico)
-  - [9. Guida all'Installazione](#9-guida-allinstallazione)
-    - [9.1 Clone e configurazione ambiente](#91-clone-e-configurazione-ambiente)
-    - [9.2 Download e Posizionamento dei Modelli (MLOps)](#92-download-e-posizionamento-dei-modelli-mlops)
-    - [9.3 Avvio in ambiente locale (HTTP)](#93-avvio-in-ambiente-locale-http)
-    - [9.4 Avvio in produzione (HTTPS con Let's Encrypt)](#94-avvio-in-produzione-https-con-lets-encrypt)
-    - [9.5 Verifica dello stato dei servizi](#95-verifica-dello-stato-dei-servizi)
-  - [10. Variabili d'Ambiente](#10-variabili-dambiente)
-  - [11. Verifica Sicurezza Database (Cifratura ALDE)](#11-verifica-sicurezza-database-cifratura-alde)
-  - [12. Risoluzione Problemi (Troubleshooting)](#12-risoluzione-problemi-troubleshooting)
-  - [13. Riferimenti Scientifici](#13-riferimenti-scientifici)
+![Python](https://img.shields.io/badge/Python-3.12-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16-orange) ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-brightgreen) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![Security](https://img.shields.io/badge/Security-AES--256%20ALDE-red) ![HTTPS](https://img.shields.io/badge/HTTPS-Let's_Encrypt-yellow)
 
 ---
-    
+
+## Indice
+
+- [1. Visione del Progetto e Origine](#1-visione-del-progetto-e-origine)
+- [2. Evoluzione Architetturale: da Gradio a Microservizi](#2-evoluzione-architetturale-da-gradio-a-microservizi)
+- [3. Architettura del Sistema e Sicurezza (ALDE)](#3-architettura-del-sistema-e-sicurezza-alde)
+- [4. Stack Tecnologico](#4-stack-tecnologico)
+- [5. Struttura del Progetto](#5-struttura-del-progetto)
+- [6. I Modelli di Classificazione](#6-i-modelli-di-classificazione)
+- [7. API Reference](#7-api-reference)
+- [8. Frontend: Interfaccia Web](#8-frontend-interfaccia-web)
+- [9. Guida all'Installazione](#9-guida-allinstallazione)
+- [10. Variabili d'Ambiente](#10-variabili-dambiente)
+- [11. Verifica Sicurezza Database (Cifratura ALDE)](#11-verifica-sicurezza-database-cifratura-alde)
+- [12. Risoluzione Problemi (Troubleshooting)](#12-risoluzione-problemi-troubleshooting)
+- [13. Riferimenti Scientifici](#13-riferimenti-scientifici)
+
+---
+
 ## 1. Visione del Progetto e Origine
 
 **ECG Arrhythmia Classifier** è un sistema web di supporto diagnostico per la classificazione automatica delle aritmie cardiache a partire da segnali ECG del dataset standard **MIT-BIH Arrhythmia Database** (87.554 campioni, 5 classi, 360 Hz).
@@ -91,34 +75,35 @@ Il sistema è composto da **4 servizi Docker** comunicanti su una rete bridge de
 Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico in chiaro risiede nel database: il Service Layer cifra e decifra i dati asincronamente utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)** prima di interagire con MongoDB (garantendo il principio di *Encryption at Rest* e un disaccoppiamento logico perfetto).
 
 ```text
-                        ┌─────────────────────────────────┐
-                        │          Client Browser         │
-                        └─────────────────────────────────┘
-                                        │ HTTPS :443
-                        ┌─────────────────────────────────┐
-                        │     Frontend (Nginx)            │
-                        │  - Serve HTML/CSS/JS statici    │
-                        │  - Reverse proxy /api/* │
-                        │  - Redirect HTTP → HTTPS        │
-                        └────────────┬────────────┬───────┘
-                                     │            │
-              /api/predict/          │            │   /api/history/
-                        ┌────────────▼──┐    ┌────▼───────────────┐
-                        │  Prediction   │    │  History Service   │
-                        │  Service      │    │  (FastAPI :8001)   │
-      (Cifra i dati  ←──┤  (FastAPI     │    │  - Decifra i dati  ├──→ (Estrae JSON
-      prima del DB)     │   :8000)      │    │    al volo per UI  │     in chiaro)
-                        └──────┬────────┘    └───────────┬────────┘
-                               │                         │
-                               └──────────────┬──────────┘
-                                              │
-                              ┌───────────────▼────────────┐
-                              │        MongoDB :27017      │
-                              │   Database: ecgdb          │
-                              │   Collection: predictions  │
-                              │   (Contiene SOLO dati AES) │
-                              └────────────────────────────┘
+                        ┌─────────────────────────────────┐
+                        │          Client Browser         │
+                        └─────────────────────────────────┘
+                                        │ HTTPS :443
+                        ┌─────────────────────────────────┐
+                        │     Frontend (Nginx)            │
+                        │  - Serve HTML/CSS/JS statici    │
+                        │  - Reverse proxy /api/*         │
+                        │  - Redirect HTTP → HTTPS        │
+                        └────────────┬────────────┬───────┘
+                                     │            │
+              /api/predict/          │            │   /api/history/
+                        ┌────────────▼──┐    ┌────▼───────────────┐
+                        │  Prediction   │    │  History Service   │
+                        │  Service      │    │  (FastAPI :8001)   │
+      (Cifra i dati  ←──┤  (FastAPI     │    │  - Decifra i dati  ├──→ (Estrae JSON
+      prima del DB)     │   :8000)      │    │    al volo per UI  │     in chiaro)
+                        └──────┬────────┘    └───────────┬────────┘
+                               │                         │
+                               └──────────────┬──────────┘
+                                              │
+                              ┌───────────────▼────────────┐
+                              │        MongoDB :27017      │
+                              │   Database: ecgdb          │
+                              │   Collection: predictions  │
+                              │   (Contiene SOLO dati AES) │
+                              └────────────────────────────┘
 ```
+
 ### Flusso di una predizione
 
 1. Il browser invia `POST /api/predict/` con il segnale (array di 187 float).
@@ -142,7 +127,7 @@ Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implem
 | **Deep Learning** | TensorFlow / Keras | 2.16.1 | Modello CNN 1D |
 | **Machine Learning** | Scikit-learn + Joblib | 1.5.0 | Modello Random Forest |
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
-| **Sicurezza / Crittografia**| Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
+| **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
 | **Database** | MongoDB | 7.0 | Persistenza predizioni + segnali |
 | **ODM Asincrono** | Motor + PyMongo | 3.x / 4.x | Driver async MongoDB per FastAPI |
 | **Validazione** | Pydantic | 2.x | Validazione input/output API |
@@ -156,46 +141,48 @@ Per garantire l'assoluta confidenzialità dei dati medici, l'architettura implem
 ```text
 ECG-ARRHYTHMIA-/
 ├── frontend/
-│   ├── src/
-│   │   ├── index.html          # SPA principale
-│   │   ├── app.js              # Logica UI: input, predizione, storico
-│   │   └── style.css           # Design system (CSS variables, componenti)
-│   ├── Dockerfile              # Build Nginx Alpine + copia statici
-│   └── nginx.conf              # Reverse proxy, HTTPS, redirect HTTP→HTTPS
+│   ├── src/
+│   │   ├── index.html          # SPA principale
+│   │   ├── app.js              # Logica UI: input, predizione, storico
+│   │   └── style.css           # Design system (CSS variables, componenti)
+│   ├── Dockerfile              # Build Nginx Alpine + copia statici
+│   └── nginx.conf              # Reverse proxy, HTTPS, redirect HTTP→HTTPS
 │
 ├── prediction-service/
-│   ├── models/
-│   │   ├── ecg_cnn_model.h5    # Pesi CNN 1D addestrata (TensorFlow/Keras)
-│   │   └── ecg_rf_model.pkl    # Modello Random Forest serializzato (joblib)
-│   ├── routers/
-│   │   └── predict.py          # POST /predict/ — orchestrazione inferenza
-│   ├── services/
-│   │   ├── cnn_service.py      
-│   │   ├── rf_service.py       
-│   │   └── db_service.py       # Cifratura Fernet e save_prediction()
-│   ├── main.py                 
-│   ├── requirements.txt        # Include cryptography==42.0.5
-│   └── Dockerfile              
+│   ├── models/                 # NON incluso nel repo (vedi sezione 9.2)
+│   │   ├── ecg_cnn_model.h5    # Pesi CNN 1D addestrata (TensorFlow/Keras)
+│   │   └── ecg_rf_model.pkl    # Modello Random Forest serializzato (joblib)
+│   ├── routers/
+│   │   └── predict.py          # POST /predict/ — orchestrazione inferenza
+│   ├── services/
+│   │   ├── cnn_service.py
+│   │   ├── rf_service.py
+│   │   └── db_service.py       # Cifratura Fernet e save_prediction()
+│   ├── main.py
+│   ├── requirements.txt        # Include cryptography==42.0.5
+│   └── Dockerfile
 │
 ├── history-service/
-│   ├── routers/
-│   │   └── history.py          
-│   ├── services/
-│   │   └── db_service.py       # Decifratura on-the-fly e get_predictions()
-│   ├── main.py                 
-│   ├── requirements.txt        
-│   └── Dockerfile              
+│   ├── routers/
+│   │   └── history.py
+│   ├── services/
+│   │   └── db_service.py       # Decifratura on-the-fly e get_predictions()
+│   ├── main.py
+│   ├── requirements.txt
+│   └── Dockerfile
 │
 ├── mongo/
-│   └── init/
-│       └── init.js             # Crea collection predictions + indici MongoDB
+│   └── init/
+│       └── init.js             # Crea collection predictions + indici MongoDB
 │
-├── docker-compose.yml          # Orchestrazione: mongo, prediction, history, frontend, certbot
-├── .env                        # Variabili d'ambiente REALI (non committato)
-├── .env.example                # Template variabili (committato)
+├── docker-compose.yml          # Orchestrazione: mongo, prediction, history, frontend, certbot
+├── .env                        # Variabili d'ambiente REALI (non committato)
+├── .env.example                # Template variabili (committato)
 └── .gitignore
-
 ```
+
+---
+
 ## 6. I Modelli di Classificazione
 
 ### 6.1 CNN 1D
@@ -204,15 +191,15 @@ Architettura end-to-end con **~204K parametri addestrabili**. Input: segnale ECG
 
 ```
 Input (187, 1)
-    ↓
+    ↓
 [Blocco 1] Conv1D(32, kernel=3, ReLU) → BatchNorm → MaxPooling1D → Dropout(0.2)
-    ↓
+    ↓
 [Blocco 2] Conv1D(64, kernel=3, ReLU) → BatchNorm → MaxPooling1D → Dropout(0.2)
-    ↓
+    ↓
 [Blocco 3] Conv1D(128, kernel=3, ReLU) → BatchNorm → MaxPooling1D → Dropout(0.2)
-    ↓
+    ↓
 Flatten → Dense(64, ReLU) → Dense(5, Softmax)
-    ↓
+    ↓
 Output: distribuzione di probabilità sulle 5 classi
 ```
 
@@ -241,8 +228,6 @@ Entrambi i modelli espongono uno **stato di affidabilità** basato su soglia fis
 - **Confidenza ≥ 0.60** → `"Diagnosi ad alta confidenza"`
 - **Confidenza < 0.60** → `"Bassa confidenza (Revisione clinica raccomandata)"`
 
-Questo meccanismo è particolarmente rilevante per i falsi positivi a bassa confidenza della RF, che l'interfaccia segnala proattivamente all'operatore prima che venga accettato un allarme potenzialmente errato.
-
 ---
 
 ## 7. API Reference
@@ -256,32 +241,33 @@ Esegue l'inferenza parallela con CNN 1D e RF sul segnale ECG fornito. Salva il r
 **Request body:**
 ```json
 {
-  "signal": [0.123, -0.045, 0.567, "..."]
+  "signal": [0.123, -0.045, 0.567, "..."],
+  "ground_truth": "N (Normale)"
 }
 ```
-> Il campo `signal` deve contenere esattamente **187 valori float**. La validazione è gestita da Pydantic; in caso contrario viene restituito `422 Unprocessable Entity`.
+> Il campo `signal` deve contenere esattamente **187 valori float**. Il campo `ground_truth` è opzionale e viene salvato cifrato insieme alla predizione per consentire la validazione clinica a posteriori.
 
 **Response `200 OK`:**
 ```json
 {
-  "cnn": {
-    "diagnosi": "N (Normale)",
-    "confidenza": 0.9823,
-    "distribuzione": {
-      "N (Normale)": 0.9823,
-      "S (Sopraventricolare)": 0.0041,
-      "V (Ventricolare)": 0.0089,
-      "F (Fusion)": 0.0032,
-      "Q (Non classificabile)": 0.0015
-    },
-    "stato_affidabilita": "Diagnosi ad alta confidenza"
-  },
-  "rf": {
-    "diagnosi": "N (Normale)",
-    "confidenza": 0.7200,
-    "distribuzione": { "...": "..." },
-    "stato_affidabilita": "Diagnosi ad alta confidenza"
-  }
+  "cnn": {
+    "diagnosi": "N (Normale)",
+    "confidenza": 0.9823,
+    "distribuzione": {
+      "N (Normale)": 0.9823,
+      "S (Sopraventricolare)": 0.0041,
+      "V (Ventricolare)": 0.0089,
+      "F (Fusion)": 0.0032,
+      "Q (Non classificabile)": 0.0015
+    },
+    "stato_affidabilita": "Diagnosi ad alta confidenza"
+  },
+  "rf": {
+    "diagnosi": "N (Normale)",
+    "confidenza": 0.7200,
+    "distribuzione": { "...": "..." },
+    "stato_affidabilita": "Diagnosi ad alta confidenza"
+  }
 }
 ```
 
@@ -309,17 +295,18 @@ Ritorna le ultime predizioni salvate, ordinate dalla più recente. Il segnale gr
 **Response `200 OK`:**
 ```json
 {
-  "total": 2,
-  "skip": 0,
-  "limit": 50,
-  "data": [
-    {
-      "id": "6849a1f3c2e4d500123abcde",
-      "timestamp": "2026-06-09T14:32:00.000Z",
-      "cnn": { "diagnosi": "V (Ventricolare)", "confidenza": 0.9123, "..." },
-      "rf":  { "diagnosi": "N (Normale)",      "confidenza": 0.8800, "..." }
-    }
-  ]
+  "total": 2,
+  "skip": 0,
+  "limit": 50,
+  "data": [
+    {
+      "id": "6849a1f3c2e4d500123abcde",
+      "timestamp": "2026-06-09T14:32:00.000Z",
+      "cnn": { "diagnosi": "V (Ventricolare)", "confidenza": 0.9123, "..." },
+      "rf":  { "diagnosi": "N (Normale)",      "confidenza": 0.8800, "..." },
+      "ground_truth": "V (Ventricolare)"
+    }
+  ]
 }
 ```
 
@@ -344,19 +331,16 @@ Single-page application statica servita da Nginx. Nessun framework JS — vanill
 Tre modalità di input del segnale ECG:
 
 - **Manuale** — textarea per incollare 187 valori separati da virgola/spazio/punto e virgola. Contatore campioni in tempo reale con anteprima del tracciato ECG su canvas.
-- **CSV** — drag & drop o selezione file. Supporta la prima riga del formato MIT-BIH standard (188 valori: i 187 campioni + etichetta di classe, che viene automaticamente rimossa).
-- **Esempio casuale** — recupera un segnale reale dal test set MIT-BIH tramite history service per validazione interattiva.
+- **CSV** — drag & drop o selezione file. Supporta la prima riga del formato MIT-BIH standard (188 valori: i 187 campioni + etichetta di classe). L'etichetta viene estratta automaticamente e popola il campo Ground Truth.
+- **Esempio casuale** — recupera un segnale reale dallo storico per validazione interattiva. Se il record ha un ground truth salvato, viene caricato automaticamente.
 
-Per ogni predizione vengono mostrati:
-- Diagnosi principale di ciascun modello
-- Confidenza con barra progress animata
-- Stato di affidabilità (badge verde/rosso)
-- Distribuzione di probabilità sulle 5 classi (mini-chart a barre)
-- Banner di accordo/disaccordo diagnostico tra CNN e RF
+Il campo **Ground Truth** si comporta in modo intelligente: si auto-popola (badge verde "✓ Auto") quando il segnale proviene da CSV con etichetta o da un record dello storico, e rimane modificabile manualmente. Dopo la classificazione, un banner mostra se CNN e RF hanno classificato correttamente rispetto alla classe reale nota.
+
+Per ogni predizione vengono mostrati: diagnosi principale, confidenza con barra animata, stato di affidabilità (badge verde/rosso), distribuzione di probabilità sulle 5 classi e banner di accordo/disaccordo diagnostico tra CNN e RF.
 
 ### Tab Storico
 
-Lista paginata delle predizioni precedenti con timestamp, diagnosi CNN e RF, confidenze. Pulsante di aggiornamento manuale.
+Lista paginata delle predizioni precedenti con timestamp, diagnosi CNN e RF, confidenze e ground truth (se disponibile). Pulsante di aggiornamento manuale.
 
 ---
 
@@ -367,49 +351,124 @@ Lista paginata delle predizioni precedenti con timestamp, diagnosi CNN e RF, con
 ### 9.1 Clone e configurazione ambiente
 
 ```bash
-git clone <url-repository>
-cd ECG-ARRHYTHMIA
+git clone https://github.com/SoniaSergio/EvSw_Project.git
+cd EvSw_Project
 cp .env.example .env
-mkdir -p certbot/empty
-# Modifica .env con i parametri personalizzati se necessario
+# Modifica .env inserendo la tua ENCRYPTION_KEY e le variabili necessarie
 ```
+
 ### 9.2 Download e Posizionamento dei Modelli (MLOps)
 
-Per mantenere il repository leggero e rispettare le best practice di versionamento (evitando il tracciamento di artefatti binari pesanti), i file dei modelli addestrati non sono inclusi direttamente nel codice sorgente.
+Per mantenere il repository leggero e rispettare le best practice di versionamento, i file dei modelli addestrati non sono inclusi nel codice sorgente e vanno caricati manualmente.
 
 **Passaggio 1:** Scarica i modelli pre-addestrati da questo link:
 https://drive.google.com/drive/folders/1A8xFMW73WwlKUykkts3UPYPOiUmoZimu?usp=drive_link
 
-I file da scaricare sono due:
-1. `ecg_cnn_model.h5` (Pesi della rete neurale convoluzionale)
-2. `ecg_rf_model.pkl` (Modello Random Forest serializzato)
+I file da scaricare sono:
+1. `ecg_cnn_model.h5` — pesi della rete neurale convoluzionale
+2. `ecg_rf_model.pkl` — modello Random Forest serializzato
 
-**Passaggio 2:** Copia i due file appena scaricati all'interno della directory del Prediction Service eseguendo questi comandi (o trascinandoli manualmente):
-
-```bash
-cp cartella_download/ecg_cnn_model.h5  ./prediction-service/models/
-cp cartella_download/ecg_rf_model.pkl  ./prediction-service/models/
-```
+**Passaggio 2:** Posiziona i file nella cartella `prediction-service/models/`. In locale puoi trascinarli manualmente. Su un server remoto (es. Oracle Cloud) usa un client SFTP come MobaXterm: trascina l'intera cartella `models/` nel pannello file a sinistra, navigando fino a `~/EvSw_Project/prediction-service/`.
 
 ### 9.3 Avvio in ambiente locale (HTTP)
 
-Impostare CERTBOT_PATH=/etc/letsencrypt nel .env.
+Il file `nginx.conf` incluso nel repository è configurato per la produzione con HTTPS e dominio reale. Per eseguire il progetto in locale, sostituisci temporaneamente il contenuto di `frontend/nginx.conf` con la seguente versione HTTP:
 
-Eseguire: docker compose up -d frontend mongo.
+```nginx
+server {
+    listen 80;
+    server_name localhost;
 
-Eseguire il challenge Certbot e avviare: docker compose up --build -d.
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/predict/ {
+        proxy_pass http://prediction-service:8000/predict/;
+    }
+
+    location /api/history/ {
+        proxy_pass http://history-service:8001/history/;
+    }
+}
+```
+
+Assicurarsi che nel `.env` sia impostato `CERTBOT_PATH=./certbot/empty`, poi:
+
+```bash
+docker compose up -d
+```
 
 Il frontend sarà accessibile su `http://localhost`.
 
 ### 9.4 Avvio in produzione (HTTPS con Let's Encrypt)
 
-Il setup HTTPS richiede un dominio reale e un server con porte 80/443 aperte.
+Il setup HTTPS richiede un dominio reale con record DNS che punta all'IP del server e le porte 80/443 aperte.
 
-1. Assicurarsi che nel file `.env` il percorso sia impostato a `CERTBOT_PATH=/etc/letsencrypt`.
-2. Eseguire il primo avvio per il challenge di Certbot:
-   ```bash
-   docker compose up -d frontend mongo
-   ```
+**Passaggio 1:** Installa Git e aggiungi l'utente al gruppo Docker (necessario solo al primo accesso sul server):
+
+```bash
+sudo dnf install git -y
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**Passaggio 2:** Clona il repository e configura l'ambiente:
+
+```bash
+git clone https://github.com/SoniaSergio/EvSw_Project.git
+cd EvSw_Project
+nano .env
+# Inserisci ENCRYPTION_KEY, MONGO_URI e CERTBOT_PATH=/etc/letsencrypt
+```
+
+**Passaggio 3:** Carica i modelli nella cartella `prediction-service/models/` via SFTP (vedi sezione 9.2).
+
+**Passaggio 4:** Crea le cartelle per Certbot sul server host:
+
+```bash
+sudo mkdir -p /var/www/certbot
+sudo mkdir -p /etc/letsencrypt
+```
+
+**Passaggio 5:** Apri le porte sul firewall:
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --reload
+```
+
+**Passaggio 6:** Avvia frontend e mongo per rendere disponibile il challenge HTTP:
+
+```bash
+docker compose up -d frontend mongo
+```
+
+**Passaggio 7:** Esegui Certbot per ottenere il certificato SSL:
+
+```bash
+docker run --rm \
+  -v /etc/letsencrypt:/etc/letsencrypt \
+  -v /var/www/certbot:/var/www/certbot \
+  certbot/certbot certonly --webroot \
+  --webroot-path=/var/www/certbot \
+  --email TUA_EMAIL@esempio.com \
+  --agree-tos \
+  --no-eff-email \
+  -d tuo-dominio.com
+```
+
+**Passaggio 8:** Se il certificato è stato emesso con successo, avvia l'intero stack:
+
+```bash
+docker compose up -d
+```
+
+Il sistema sarà raggiungibile su `https://tuo-dominio.com`.
+
 ### 9.5 Verifica dello stato dei servizi
 
 ```bash
@@ -424,47 +483,53 @@ docker compose logs -f prediction-service
 
 ## 10. Variabili d'Ambiente
 
-Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il file `.env` è incluso nel `.gitignore` e non deve essere mai committato, in quanto contiene dati sensibili.
+Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il file `.env` è incluso nel `.gitignore` e non deve essere mai committato.
 
 | Variabile | Default / Esempio | Descrizione |
 |:---|:---|:---|
 | `MONGO_URI` | `mongodb://mongo:27017/ecgdb` | URI di connessione MongoDB. In Docker Compose usare il nome del servizio (`mongo`) come host. |
-| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave simmetrica a 32-byte codificata in URL-safe Base64 per l'algoritmo Fernet (ALDE). Deve essere identica tra locale e server. |
+| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave simmetrica a 32-byte codificata in URL-safe Base64 per l'algoritmo Fernet (ALDE). Deve essere identica tra locale e server. Generabile con: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `CERTBOT_PATH` | `./certbot/empty` | Percorso dei volumi SSL. Impostare `./certbot/empty` per sviluppo locale (HTTP) o `/etc/letsencrypt` per la produzione (HTTPS). |
 
 ---
+
 ## 11. Verifica Sicurezza Database (Cifratura ALDE)
+
 Per verificare che i dati siano correttamente cifrati a riposo (Encryption at Rest) su MongoDB, è possibile ispezionare direttamente il database per confermare che le informazioni cliniche non siano accessibili in chiaro:
 
 Accedere alla shell di MongoDB nel container:
 
-  ```bash
-  docker exec -it ecg-mongo mongosh
-  ```
+```bash
+docker exec -it ecg-mongo mongosh
+```
+
 Selezionare il database e interrogare la collezione:
 
-  ```javascript
-  use ecgdb
-  db.predictions.find().sort({_id: -1}).limit(1).pretty()
-  ```
-Nota: I campi signal, cnn e rf appariranno come stringhe cifrate (es: gAAAAA...), confermando che il pattern ALDE impedisce l'accesso ai dati clinici sensibili anche in caso di compromissione del database.
+```javascript
+use ecgdb
+db.predictions.find().sort({_id: -1}).limit(1).pretty()
+```
 
---- 
+Nota: I campi `signal`, `cnn`, `rf` e `ground_truth` appariranno come stringhe cifrate (es: `gAAAAA...`), confermando che il pattern ALDE impedisce l'accesso ai dati clinici sensibili anche in caso di compromissione del database.
+
+---
+
 ## 12. Risoluzione Problemi (Troubleshooting)
 
 | Sintomo | Causa Probabile | Soluzione |
 |:---|:---|:---|
-| **Crash "Manca la ENCRYPTION_KEY"** | Il file `.env` non esiste o la variabile non è mappata in Docker Compose | Assicurarsi di aver clonato `.env.example` in `.env` e aver compilato la chiave Fernet a 32 byte. |
+| **Crash "Manca la ENCRYPTION_KEY"** | Il file `.env` non esiste o la variabile non è mappata in Docker Compose | Assicurarsi di aver copiato `.env.example` in `.env` e aver compilato la chiave Fernet. |
 | **`prediction-service` in crash loop** | File modello `.h5` o `.pkl` mancante o inaccessibile | Verificare che la cartella `./prediction-service/models/` contenga entrambi i file addestrati. |
 | **"Attese 187 valori, trovati N"** | Il file CSV contiene header o formati non validi | Verificare che la prima riga contenga esattamente 187 valori numerici separati da virgola (o 188 per formato MIT-BIH). |
 | **Storico sempre vuoto** | Il frontend non raggiunge l'`history-service` | Controllare che il container `ecg-history` sia in esecuzione (`docker compose ps`) e che `nginx.conf` esegua il proxy corretto. |
-| **Errore HTTPS "certificato non valido"** | Certbot non ha ancora emesso il certificato | Eseguire prima il challenge HTTP (Step 2 della guida) e verificare che i record DNS puntino all'IP del server. |
+| **Errore HTTPS "certificato non valido"** | Certbot non ha ancora emesso il certificato | Eseguire prima il challenge HTTP (Passaggio 6 della guida) e verificare che i record DNS puntino all'IP del server. |
 | **Predizione lenta (> 5s) al primo avvio** | Lazy loading di TensorFlow in memoria | Comportamento normale solo alla prima inferenza dopo l'avvio. Le chiamate successive risponderanno in < 200 ms. |
-| **MongoDB: "Connection refused"** | Race condition all'avvio: i servizi FastAPI tentano la connessione prima che Mongo sia pronto | Attendere 10-15 secondi e riavviare i servizi dipendenti: `docker compose restart prediction-service history-service`. |
-| **`cryptography` / `libgomp1` not found** | Dipendenze mancanti nell'immagine compilata | Eseguire `docker compose build --no-cache` per forzare il download del modulo Fernet e le librerie di TensorFlow. |
+| **MongoDB: "Connection refused"** | Race condition all'avvio | Attendere 10-15 secondi e riavviare: `docker compose restart prediction-service history-service`. |
+| **`cryptography` / `libgomp1` not found** | Dipendenze mancanti nell'immagine compilata | Eseguire `docker compose build --no-cache`. |
+| **`permission denied` su docker** | Utente non nel gruppo docker | Eseguire `sudo usermod -aG docker $USER` seguito da `newgrp docker`. |
+| **Certbot: `unauthorized` / 404** | Le cartelle `/var/www/certbot` o `/etc/letsencrypt` non esistono sull'host | Eseguire `sudo mkdir -p /var/www/certbot && sudo mkdir -p /etc/letsencrypt` e riavviare il frontend prima di rieseguire Certbot. |
 
 ---
-
 
 ## 13. Riferimenti Scientifici
 
