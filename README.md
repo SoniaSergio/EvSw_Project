@@ -83,17 +83,21 @@ graph TD
     User((Utente)) --> Browser[Browser Client]
     Browser -->|HTTPS :443| Nginx
 
-    subgraph "Docker Network ecg-net"
+    subgraph ecg-net["Docker Network ecg-net"]
         Nginx[Nginx Reverse Proxy - Frontend]
-        Nginx --> Pred[Prediction Service - FastAPI]
-        Nginx --> Hist[History Service - FastAPI]
-        
-        Pred --> ALDE[ALDE Encryption Layer]
-        Hist --> ALDE
-        ALDE --> Mongo[(MongoDB)]
-        
-        Seed[Seed - one shot]-->|popola ecg_samples| Mongo
+        Pred[Prediction Service - FastAPI]
+        Hist[History Service - FastAPI]
+        ALDE[ALDE Encryption Layer]
+        Mongo[(MongoDB)]
+        Seed[Seed - one shot]
     end
+
+    Nginx --> Pred
+    Nginx --> Hist
+    Pred --> ALDE
+    Hist --> ALDE
+    ALDE --> Mongo
+    Seed -->|popola ecg_samples| Mongo
 
     style ALDE fill:#f9f,stroke:#333,stroke-width:2px
     style Mongo fill:#e1f5fe,stroke:#01579b
