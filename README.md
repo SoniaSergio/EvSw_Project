@@ -50,16 +50,12 @@ La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante
 
 La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispetto alla RF (Recall: 0.60 → 0.91), la classe a maggiore rischio clinico per il paziente.
 
+
 ### Scelte architetturali motivate
-
 **MongoDB (NoSQL)** è stato scelto in quanto le strutture dati delle predizioni sono flessibili (il campo `ground_truth` è opzionale) e non richiedono transazioni ACID multi-documento — contesto in cui i database NoSQL sono più adatti rispetto ai relazionali.
+**Comunicazione sincrona** tra i servizi: il frontend attende la risposta prima di procedere, scelta adatta a un sistema request-response a bassa latenza come la classificazione ECG in tempo reale.
+**Statelessness**: entrambi i microservizi non mantengono stato interno tra le richieste. Lo stato è interamente delegato a MongoDB, il che consente — in linea di principio — la replica e la migrazione dei container senza interruzioni di servizio.
 
-**Comunicazione sincrona** tra i servizi: il frontend attende la risposta prima di procedere, 
-scelta adatta a un sistema request-response a bassa latenza come la classificazione ECG in tempo reale.
-
-**Statelessness**: entrambi i microservizi non mantengono stato interno tra le richieste. 
-Lo stato è interamente delegato a MongoDB, il che consente — in linea di principio — 
-la replica e la migrazione dei container senza interruzioni di servizio.
 ---
 
 ## 2. Evoluzione Architetturale: da Gradio a Microservizi
@@ -89,7 +85,7 @@ Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge de
 
 
 <p align="center">
-  <img src="./docs/architettura.svg" width="700" alt="Architettura ECG Arrhythmia Classifier">
+  <img src="./docs/architettura.png" width="700" alt="Architettura ECG Arrhythmia Classifier">
 </p>
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
