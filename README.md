@@ -50,6 +50,16 @@ La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante
 
 La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispetto alla RF (Recall: 0.60 → 0.91), la classe a maggiore rischio clinico per il paziente.
 
+### Scelte architetturali motivate
+
+**MongoDB (NoSQL)** è stato scelto in quanto le strutture dati delle predizioni sono flessibili (il campo `ground_truth` è opzionale) e non richiedono transazioni ACID multi-documento — contesto in cui i database NoSQL sono più adatti rispetto ai relazionali.
+
+**Comunicazione sincrona** tra i servizi: il frontend attende la risposta prima di procedere, 
+scelta adatta a un sistema request-response a bassa latenza come la classificazione ECG in tempo reale.
+
+**Statelessness**: entrambi i microservizi non mantengono stato interno tra le richieste. 
+Lo stato è interamente delegato a MongoDB, il che consente — in linea di principio — 
+la replica e la migrazione dei container senza interruzioni di servizio.
 ---
 
 ## 2. Evoluzione Architetturale: da Gradio a Microservizi
@@ -68,7 +78,7 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 | **Architettura** | Monolitica, single-process | 5 servizi indipendenti dockerizzati |
 | **Inferenza** | Sincrona, single-thread | FastAPI async, latenza media < 200 ms |
 | **Scalabilita** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
-| **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + **Cifratura AES-256 (ALDE)** nel DB |
+| **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + ALDE AES-256: sicurezza come preoccupazione trasversale distribuita su trasporto, service layer e storage |
 | **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da dataset MIT-BIH |
 
 ---
@@ -78,33 +88,31 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
 
 
-```mermaid
-graph TD
-    User((Utente)) --> Browser[Browser Client]
-    Browser -->|HTTPS :443| Nginx
-
-    subgraph ecg-net["Docker Network ecg-net"]
-        Nginx[Nginx Reverse Proxy - Frontend]
-        Pred[Prediction Service - FastAPI]
-        Hist[History Service - FastAPI]
-        ALDE[ALDE Encryption Layer]
-        Mongo[(MongoDB)]
-        Seed[Seed - one shot]
-    end
-
-    Nginx --> Pred
-    Nginx --> Hist
-    Pred --> ALDE
-    Hist --> ALDE
-    ALDE --> Mongo
-    Seed -->|popola ecg_samples| Mongo
-
-    style ALDE fill:#f9f,stroke:#333,stroke-width:2px
-    style Mongo fill:#e1f5fe,stroke:#01579b
-    style Seed fill:#fff9c4,stroke:#f9a825
-```
+<p align="center">
+  <img src="./docs/architettura.svg" width="700" alt="Architettura ECG Arrhythmia Classifier">
+</p>
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
+
+### Attributi di qualità
+
+| Attributo | Scelta architetturale |
+|:---|:---|
+| **Security** | HTTPS/TLS 1.3 sul trasporto + ALDE AES-256 a riposo: sicurezza distribuita su più livelli, non affidata a un singolo componente |
+| **Maintainability** | 5 servizi a responsabilità singola — ogni componente può essere modificato, sostituito o scalato indipendentemente |
+| **Resilience** | Isolamento Docker: il crash di un servizio non propaga il guasto agli altri |
+| **Scalability** | Architettura orientata ai servizi su cloud: ogni microservizio è scalabile orizzontalmente in modo indipendente |
+| **Responsiveness** | Comunicazione sincrona diretta tra servizi, senza broker intermedi — latenza media < 200 ms |
+
+### Decisioni architetturali
+
+1. **Separazione prediction/history service** — i due servizi hanno responsabilità distinte e stack differenti: il prediction-service richiede TensorFlow (~1GB), l'history-service è leggero (~50MB). Separarli permette build e scaling indipendenti senza appesantire inutilmente il container di lettura.
+
+2. **Database condiviso con collection separate** — a differenza del pattern ideale (un DB per microservizio), si adotta un'istanza MongoDB condivisa con collection distinte (`predictions`, `ecg_samples`). Scelta motivata dalla semplicità operativa per un sistema a basso carico e dall'assenza di transazioni cross-service.
+
+3. **Comunicazione sincrona diretta** — i servizi comunicano via HTTP diretto senza broker intermedi (es. RabbitMQ). Adatta a un sistema request-response a bassa latenza; un broker introdurrebbe complessità senza benefici a questo livello di carico.
+
+4. **ALDE come pattern di sicurezza trasversale** — la cifratura è implementata nel service layer, non delegata al database. Questo garantisce che i dati siano illeggibili anche in caso di compromissione diretta di MongoDB, senza dipendere dalle funzionalità di sicurezza del DB.
 
 
 ### Flusso di una predizione
@@ -385,6 +393,14 @@ Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e 
 Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate dalla più recente, con timestamp, diagnosi CNN e RF, livelli di confidenza e ground truth (se disponibile). I dati vengono decifrati on-the-fly dall'history-service prima di essere inviati al frontend: il segnale grezzo è escluso dalla lista per alleggerire la risposta.
 
 ![Storico predizioni](docs/storico-predizioni.png)
+
+### 8.4 Scenari clinici esemplificativi
+
+| Scenario | Input | Risultato atteso |
+|:---|:---|:---|
+| **Battito normale, alta confidenza** | Segnale classe N | CNN e RF concordano → banner verde "Modelli concordi" |
+| **Aritmia ventricolare** | Segnale classe V | CNN: V (0.91) · RF: N (0.87) → banner giallo "Modelli discordi", revisione raccomandata |
+| **Bassa confidenza RF** | Segnale classe F (Fusion) | RF confidenza < 0.60 → badge "Revisione clinica raccomandata" |
 
 ---
 
