@@ -24,4 +24,4 @@ prediction-service/models/*.pkl
 .vscode/
 .idea/
 *.log
-.env.local
+.env

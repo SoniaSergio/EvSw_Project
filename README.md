@@ -109,24 +109,27 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 5. La risposta API — con i dati in chiaro — viene restituita immediatamente al frontend per la visualizzazione.
 6. Nelle letture successive tramite lo storico, l'history-service recupera i documenti cifrati e li decifra in RAM prima di inviarli alla UI; il segnale grezzo è escluso dalla lista paginata e incluso solo nella lettura per ID.
 
+---
+
 ## 4. Stack Tecnologico
 
 | Layer | Tecnologia | Versione | Ruolo |
 |:---|:---|:---|:---|
 | **Frontend** | HTML5 / CSS3 / Vanilla JS | — | Interfaccia utente |
 | **Frontend Server** | Nginx Alpine | 1.27 | Serve statico + reverse proxy |
-| **Prediction API** | FastAPI + Uvicorn | 0.111 / 0.30 | Inferenza CNN e RF |
-| **History API** | FastAPI + Uvicorn | 0.115 / 0.32 | CRUD storico predizioni + campioni casuali |
-| **Deep Learning** | TensorFlow / Keras | 2.16.1 | Modello CNN 1D |
-| **Machine Learning** | Scikit-learn + Joblib | 1.5.0 | Modello Random Forest |
+| **Prediction API** | FastAPI + Uvicorn | 0.111.0 / 0.30.0 | Inferenza CNN e RF |
+| **History API** | FastAPI + Uvicorn | 0.115.5 / 0.32.1 | CRUD storico predizioni + campioni casuali |
+| **Deep Learning** | TensorFlow / Keras | 2.16.1 / 3.10.0 | Modello CNN 1D |
+| **Machine Learning** | Scikit-learn + Joblib | 1.5.0 / 1.4.2 | Modello Random Forest |
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
 | **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
 | **Database** | MongoDB | 7.0 | Persistenza predizioni + campioni MIT-BIH |
-| **ODM Asincrono** | Motor + PyMongo | 3.6.0 / 4.9.2 | Driver async MongoDB per FastAPI |
-| **Validazione** | Pydantic | 2.x | Validazione input/output API |
+| **ODM Asincrono** | Motor (pred / hist) | 3.3.2 / 3.6.0 | Driver async MongoDB per FastAPI |
+| **Driver MongoDB** | PyMongo (pred / hist) | 4.8.0 / 4.9.2 | Dipendenza Motor |
+| **Validazione** | Pydantic (pred / hist) | 2.7.0 / 2.10.3 | Validazione input/output API |
 | **Containerization** | Docker + Docker Compose | — | Orchestrazione servizi |
 | **TLS/HTTPS** | Let's Encrypt + Certbot | — | Certificati SSL con rinnovo automatico |
-
+| **Runtime** | Python | 3.9.25 | Ambiente di esecuzione (venv locale) |
 ---
 
 ## 5. Struttura del Progetto
@@ -383,6 +386,11 @@ Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate
 **Prerequisiti:** Docker Engine 24+, Docker Compose v2, Git.
 
 ### 9.1 Clone e configurazione ambiente
+> **Nota:** il sistema gira interamente in container Docker — non è necessario
+> alcun ambiente Python locale per avviarlo. Il `venv` (già escluso dal repository
+> tramite `.gitignore`) è utile solo per chi vuole ispezionare o modificare le
+> dipendenze fuori da Docker; per attivarlo: `source venv/bin/activate`
+> (da rieseguire ad ogni nuovo terminale).
 
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
