@@ -2,11 +2,12 @@ import os
 import json
 import random
 from datetime import datetime
+from typing import Optional
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 from cryptography.fernet import Fernet
 
-_client: AsyncIOMotorClient | None = None
+_client: Optional[AsyncIOMotorClient] = None
 _db = None
 
 secret_key = os.getenv("ENCRYPTION_KEY")
@@ -58,7 +59,7 @@ async def get_predictions(limit: int = 20, skip: int = 0) -> list[dict]:
         results.append(_decrypt_doc(doc, exclude_signal=True))
     return results
 
-async def get_prediction_by_id(prediction_id: str) -> dict | None:
+async def get_prediction_by_id(prediction_id: str) -> Optional[dict]:
     try:
         oid = ObjectId(prediction_id)
     except Exception:
@@ -99,7 +100,7 @@ async def get_stats() -> dict:
         "rf_distribution": rf_stats,
     }
 
-async def get_random_ecg_sample() -> dict | None:
+async def get_random_ecg_sample() -> Optional[dict]:
     pipeline = [{"$sample": {"size": 1}}]
     docs = await _db.ecg_samples.aggregate(pipeline).to_list(1)
     if not docs:

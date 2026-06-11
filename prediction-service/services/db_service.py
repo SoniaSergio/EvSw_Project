@@ -5,7 +5,7 @@ from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 from cryptography.fernet import Fernet
 
-_client: AsyncIOMotorClient | None = None
+_client: Optional[AsyncIOMotorClient] = None
 _db = None
 
 secret_key = os.getenv("ENCRYPTION_KEY")

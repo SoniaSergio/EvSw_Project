@@ -6,7 +6,7 @@
 > **Classificazione Automatica delle Aritmie ECG**
 > *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
 
-![Python](https://img.shields.io/badge/Python-3.12-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16-orange) ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-brightgreen) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![Security](https://img.shields.io/badge/Security-AES--256%20ALDE-red) ![HTTPS](https://img.shields.io/badge/HTTPS-Let's_Encrypt-yellow)
+![Python](https://img.shields.io/badge/Python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115.5-green) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16.1-orange) ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-brightgreen) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![Security](https://img.shields.io/badge/Security-AES--256%20ALDE-red) ![HTTPS](https://img.shields.io/badge/HTTPS-Let's_Encrypt-yellow)
 
 ---
 
@@ -65,7 +65,7 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 | **Deployment** | Google Colab, locale | Docker Compose, server remoto con HTTPS |
 | **Interfaccia** | Gradio auto-generata | Frontend custom HTML/CSS/JS (Nginx) |
 | **Persistenza** | Nessuna | MongoDB: storico completo e cifrato |
-| **Architettura** | Monolitica, single-process | 4 servizi indipendenti dockerizzati |
+| **Architettura** | Monolitica, single-process | 5 servizi indipendenti dockerizzati |
 | **Inferenza** | Sincrona, single-thread | FastAPI async, latenza media < 200 ms |
 | **Scalabilita** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
 | **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + **Cifratura AES-256 (ALDE)** nel DB |
@@ -81,21 +81,24 @@ Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge de
 ```mermaid
 graph TD
     User((Utente)) --> Browser[Browser Client]
-    
+    Browser -->|HTTPS :443| Nginx
+
     subgraph "Docker Network ecg-net"
-        Browser --> Nginx[Nginx Reverse Proxy]
+        Nginx[Nginx Reverse Proxy - Frontend]
         Nginx --> Pred[Prediction Service - FastAPI]
         Nginx --> Hist[History Service - FastAPI]
         
-        Pred --> Security[ALDE Encryption Layer]
-        Security --> Mongo[(MongoDB)]
-        Hist --> Security
+        Pred --> ALDE[ALDE Encryption Layer]
+        Hist --> ALDE
+        ALDE --> Mongo[(MongoDB)]
+        
+        Seed[Seed - one shot]-->|popola ecg_samples| Mongo
     end
 
-    style Security fill:#f9f,stroke:#333,stroke-width:2px
+    style ALDE fill:#f9f,stroke:#333,stroke-width:2px
     style Mongo fill:#e1f5fe,stroke:#01579b
-  
-  ```
+    style Seed fill:#fff9c4,stroke:#f9a825
+```
 
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
@@ -117,19 +120,20 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 |:---|:---|:---|:---|
 | **Frontend** | HTML5 / CSS3 / Vanilla JS | — | Interfaccia utente |
 | **Frontend Server** | Nginx Alpine | 1.27 | Serve statico + reverse proxy |
-| **Prediction API** | FastAPI + Uvicorn | 0.111.0 / 0.30.0 | Inferenza CNN e RF |
+| **Prediction API** | FastAPI + Uvicorn | 0.115.5 / 0.32.1 | Inferenza CNN e RF |
 | **History API** | FastAPI + Uvicorn | 0.115.5 / 0.32.1 | CRUD storico predizioni + campioni casuali |
-| **Deep Learning** | TensorFlow / Keras | 2.16.1 / 3.10.0 | Modello CNN 1D |
+| **Deep Learning** | TensorFlow / Keras | 2.16.1 / 3.13.2 | Modello CNN 1D |
 | **Machine Learning** | Scikit-learn + Joblib | 1.5.0 / 1.4.2 | Modello Random Forest |
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
 | **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
 | **Database** | MongoDB | 7.0 | Persistenza predizioni + campioni MIT-BIH |
-| **ODM Asincrono** | Motor (pred / hist) | 3.3.2 / 3.6.0 | Driver async MongoDB per FastAPI |
-| **Driver MongoDB** | PyMongo (pred / hist) | 4.8.0 / 4.9.2 | Dipendenza Motor |
-| **Validazione** | Pydantic (pred / hist) | 2.7.0 / 2.10.3 | Validazione input/output API |
+| **ODM Asincrono** | Motor | 3.6.0 | Driver async MongoDB per FastAPI |
+| **Driver MongoDB** | PyMongo | 4.9.2 | Dipendenza Motor |
+| **Validazione** | Pydantic | 2.10.3 | Validazione input/output API |
 | **Containerization** | Docker + Docker Compose | — | Orchestrazione servizi |
 | **TLS/HTTPS** | Let's Encrypt + Certbot | — | Certificati SSL con rinnovo automatico |
-| **Runtime** | Python | 3.9.25 | Ambiente di esecuzione (venv locale) |
+| **Runtime** | Python | 3.11 | Ambiente di esecuzione (container Docker) |
+
 ---
 
 ## 5. Struttura del Progetto
@@ -380,17 +384,18 @@ Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate
 
 ---
 
-
 ## 9. Guida all'Installazione
 
 **Prerequisiti:** Docker Engine 24+, Docker Compose v2, Git.
 
-### 9.1 Clone e configurazione ambiente
 > **Nota:** il sistema gira interamente in container Docker — non è necessario
 > alcun ambiente Python locale per avviarlo. Il `venv` (già escluso dal repository
 > tramite `.gitignore`) è utile solo per chi vuole ispezionare o modificare le
 > dipendenze fuori da Docker; per attivarlo: `source venv/bin/activate`
 > (da rieseguire ad ogni nuovo terminale).
+
+
+### 9.1 Clone e configurazione ambiente
 
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
