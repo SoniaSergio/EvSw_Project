@@ -404,23 +404,59 @@ Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate
 
 **Prerequisiti:** Docker Engine 24+, Docker Compose v2, Git.
 
-> **Nota:** il sistema gira interamente in container Docker — non è necessario
-> alcun ambiente Python locale per avviarlo. Il `venv` (già escluso dal repository
-> tramite `.gitignore`) è utile solo per chi vuole ispezionare o modificare le
-> dipendenze fuori da Docker; per attivarlo: `source venv/bin/activate`
-> (da rieseguire ad ogni nuovo terminale).
+> Il sistema gira interamente in container Docker — non è necessario alcun ambiente Python locale per avviarlo.
 
+La guida è divisa in tre percorsi. Segui **uno solo** in base all'ambiente di destinazione:
 
-### 9.1 Clone e configurazione ambiente
+|
+ Percorso 
+|
+ Quando usarlo 
+|
+|
+:---
+|
+:---
+|
+|
+[
+**
+A — Localhost
+**
+](
+#percorso-a--localhost
+)
+|
+ Vuoi provare il progetto sul tuo computer locale 
+|
+|
+[
+**
+B — Server via IP (HTTP)
+**
+](
+#percorso-b--server-via-ip-http
+)
+|
+ Hai un server remoto ma non hai un dominio configurato 
+|
+|
+[
+**
+C — Server con dominio (HTTPS)
+**
+](
+#percorso-c--server-con-dominio-https
+)
+|
+ Hai un server remoto con dominio e vuoi il deploy in produzione con certificato SSL 
+|
 
-```bash
-git clone https://github.com/SoniaSergio/EvSw_Project.git
-cd EvSw_Project
-cp .env.example .env
-# Modifica .env inserendo la tua ENCRYPTION_KEY e le variabili necessarie
-```
+In tutti i percorsi, i passi **9.A** (download modelli) e **9.B** (seed dataset) sono comuni e vanno eseguiti nella stessa maniera.
 
-### 9.2 Download e Posizionamento dei Modelli (MLOps)
+---
+
+### 9.A Download e posizionamento dei modelli (comune a tutti i percorsi)
 
 Per mantenere il repository leggero e rispettare le best practice di versionamento, i file dei modelli addestrati non sono inclusi nel codice sorgente e vanno caricati manualmente.
 
@@ -428,43 +464,68 @@ Per mantenere il repository leggero e rispettare le best practice di versionamen
 https://drive.google.com/drive/folders/1A8xFMW73WwlKUykkts3UPYPOiUmoZimu?usp=drive_link
 
 I file da scaricare sono:
-1. `ecg_cnn_model.h5` — pesi della rete neurale convoluzionale
+1. `ecg_cnn_model.keras` — pesi della rete neurale convoluzionale
 2. `ecg_rf_model.pkl` — modello Random Forest serializzato
 
-**Passaggio 2:** Posiziona i file nella cartella `prediction-service/models/`. In locale puoi trascinarli manualmente. Su un server remoto (es. Oracle Cloud) usa un client SFTP come MobaXterm: trascina l'intera cartella `models/` nel pannello file a sinistra, navigando fino a `~/EvSw_Project/prediction-service/`.
 
-### 9.3 Seed del Dataset MIT-BIH
+**Passaggio 2:** Posiziona i file nella cartella `prediction-service/models/`.
 
-La funzionalità "Esempio casuale" richiede che la collection `ecg_samples` di MongoDB sia popolata con i campioni del test set MIT-BIH (~21.000 battiti etichettati). Il file CSV non è incluso nel repository per ragioni di dimensione.
+- **In locale:** trascina i file nella cartella tramite il file manager.
+- **Su server remoto:** usa un client SFTP come MobaXterm — trascina l'intera cartella `models/` nel pannello file a sinistra, navigando fino a `~/EvSw_Project/prediction-service/`.
 
-**Passaggio 1:** Scarica `mitbih_test.csv` da Kaggle dal dataset originale al link seguente: https://www.kaggle.com/datasets/shayanfazeli/heartbeat?select=mitbih_test.csv 
+Verifica che i file siano al posto giusto:
 
-**Passaggio 2:** Carica il file nella cartella `seed/`:
+```bash
+ls -l prediction-service/models/
+```
+---
+
+### 9.B Seed del dataset MIT-BIH (comune a tutti i percorsi)
+
+La funzionalità "Esempio casuale" richiede che la collection `ecg_samples` di MongoDB sia popolata con i campioni del test set MIT-BIH (~21.000 battiti etichettati). Il file si trova nella cartella `seed/` del progetto:
+
 ```
 ~/EvSw_Project/seed/mitbih_test.csv
 ```
 
-**Passaggio 3:** Esegui il seed (va fatto una sola volta — lo script rileva automaticamente se la collection è gia popolata e non reinserisce):
+**Passaggio da effettuare dopo aver clonato il progetto in ogni tipo di percorso (in seguito verrà spiegato quando):** Esegui il seed (va fatto una sola volta — lo script rileva automaticamente se la collection è già popolata e non reinserisce):
 
 ```bash
-cd ~/EvSw_Project
 docker compose build seed
 docker compose up seed
 ```
 
 Attendere il messaggio: `Inseriti X campioni in ecg_samples.`
 
+> Se il messaggio è `Seed gia eseguito, skip.` significa che il seed era già stato eseguito in precedenza (i dati sono già nel database) — non è necessario fare nulla.
+
 **Verifica:**
 ```bash
 docker exec -it ecg-mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
+# Deve restituire circa 21892
 ```
-Deve restituire circa 21.000.
 
-### 9.4 Avvio in ambiente locale (HTTP)
+---
 
-Il file `nginx.conf` incluso nel repository è configurato per la produzione con HTTPS e dominio reale. Per eseguire il progetto in locale, sostituisci temporaneamente il contenuto di `frontend/nginx.conf` con la seguente versione HTTP:
+### Percorso A — Localhost
 
-```nginx
+Usa questo percorso per eseguire il progetto sulla tua macchina locale.
+
+**Step 1: Clona il repository e configura l'ambiente**
+
+```bash
+git clone https://github.com/SoniaSergio/EvSw_Project.git
+cd EvSw_Project
+cp .env.example .env
+# Apri .env e inserisci la tua ENCRYPTION_KEY (vedi sezione 10)
+```
+
+**Step 2: Sostituisci la configurazione Nginx con la versione HTTP locale**
+
+Il file `nginx.conf` incluso nel repository è configurato per la produzione con HTTPS. Sostituiscilo con la versione locale:
+
+```bash
+cat > frontend/nginx.conf << 'EOF'
 server {
     listen 80;
     server_name localhost;
@@ -483,47 +544,149 @@ server {
         proxy_pass http://history-service:8001/history/;
     }
 }
+EOF
 ```
 
-Assicurarsi che nel `.env` sia impostato `CERTBOT_PATH=./certbot/empty`, poi:
+**Step 3: Verifica la variabile `CERTBOT_PATH` nel file `.env`**
 
 ```bash
-docker compose up -d
+# Nel file .env deve essere impostato:
+CERTBOT_PATH=./certbot/empty
 ```
 
-Il frontend sarà accessibile su `http://localhost`.
+**Step 4: Carica i modelli** → esegui il [Passo 9.A](#9a-download-e-posizionamento-dei-modelli-comune-a-tutti-i-percorsi)
 
-### 9.5 Avvio in produzione (HTTPS con Let's Encrypt)
-
-Il setup HTTPS richiede un dominio reale con record DNS che punta all'IP del server e le porte 80/443 aperte.
-
-**Passaggio 1:** Installa Git e aggiungi l'utente al gruppo Docker (necessario solo al primo accesso sul server):
+**Step 5: Avvia tutti i servizi**
 
 ```bash
-sudo dnf install git -y
+docker compose up -d --build
+```
+
+**Step 6: Popola il database** → esegui il [Passo 9.B](#9b-seed-del-dataset-mit-bih-comune-a-tutti-i-percorsi)
+
+**Step 7: Verifica lo stato dei container**
+
+```bash
+docker compose ps
+```
+
+Il frontend è accessibile su: **`http://localhost`**
+
+---
+
+### Percorso B — Server via IP (HTTP)
+
+Usa questo percorso se hai un server remoto (es. Oracle Cloud, AWS, ecc.) ma non hai ancora un dominio configurato e vuoi accedere tramite indirizzo IP diretto (`http://IP_DEL_SERVER`).
+
+**Step 1: Preparazione del server (solo al primo accesso)**
+
+```bash
+sudo dnf install git -y          # oppure: sudo apt install git -y
 sudo usermod -aG docker $USER
 newgrp docker
 ```
 
-**Passaggio 2:** Clona il repository e configura l'ambiente:
+**Step 2: Clona il repository e configura l'ambiente**
 
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
-nano .env
-# Inserisci ENCRYPTION_KEY, MONGO_URI e CERTBOT_PATH=/etc/letsencrypt
+cp .env.example .env
+# Apri .env e inserisci la tua ENCRYPTION_KEY (vedi sezione 10)
 ```
 
-**Passaggio 3:** Carica i modelli nella cartella `prediction-service/models/`.
+**Step 3: Sostituisci la configurazione Nginx con la versione HTTP**
 
-**Passaggio 4:** Crea le cartelle per Certbot sul server host:
+```bash
+cat > frontend/nginx.conf << 'EOF'
+server {
+    listen 80;
+    server_name localhost;
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/predict/ {
+        proxy_pass http://prediction-service:8000/predict/;
+    }
+
+    location /api/history/ {
+        proxy_pass http://history-service:8001/history/;
+    }
+}
+EOF
+```
+
+**Step 4: Verifica la variabile `CERTBOT_PATH` nel file `.env`**
+
+```bash
+# Nel file .env deve essere impostato:
+CERTBOT_PATH=./certbot/empty
+```
+
+**Step 5: Apri la porta 80 sul firewall del server**
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --reload
+```
+
+> Se usi un cloud provider, ricorda di aprire anche la porta 80 nelle regole di sicurezza/Security Groups della console web (es. Oracle Cloud → Virtual Cloud Network → Security Lists).
+
+**Step 6: Carica i modelli** → esegui il [Passo 9.A](#9a-download-e-posizionamento-dei-modelli-comune-a-tutti-i-percorsi)
+
+**Step 7: Avvia tutti i servizi (con rebuild)**
+
+```bash
+docker compose up -d --build
+```
+
+**Step 8: Popola il database** → esegui il [Passo 9.B](#9b-seed-del-dataset-mit-bih-comune-a-tutti-i-percorsi)
+
+**Step 9: Verifica lo stato dei container**
+
+```bash
+docker compose ps
+```
+
+Il frontend è accessibile su: **`http://IP_DEL_SERVER`**
+
+---
+
+### Percorso C — Server con dominio (HTTPS)
+
+Usa questo percorso per il deploy in produzione con certificato SSL Let's Encrypt. Richiede un dominio reale con record DNS che punta all'IP del server e le porte 80/443 aperte.
+
+**Step 1: Preparazione del server (solo al primo accesso)**
+
+```bash
+sudo dnf install git -y          # oppure: sudo apt install git -y
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**Step 2: Clona il repository e configura l'ambiente**
+
+```bash
+git clone https://github.com/SoniaSergio/EvSw_Project.git
+cd EvSw_Project
+cp .env.example .env
+# Apri .env e inserisci ENCRYPTION_KEY, MONGO_URI e CERTBOT_PATH=/etc/letsencrypt
+```
+
+**Step 3: Carica i modelli** → esegui il [Passo 9.A](#9a-download-e-posizionamento-dei-modelli-comune-a-tutti-i-percorsi)
+
+**Step 4: Crea le cartelle per Certbot sull'host**
 
 ```bash
 sudo mkdir -p /var/www/certbot
 sudo mkdir -p /etc/letsencrypt
 ```
 
-**Passaggio 5:** Apri le porte sul firewall:
+**Step 5: Apri le porte sul firewall**
 
 ```bash
 sudo firewall-cmd --permanent --add-port=80/tcp
@@ -531,13 +694,15 @@ sudo firewall-cmd --permanent --add-port=443/tcp
 sudo firewall-cmd --reload
 ```
 
-**Passaggio 6:** Avvia frontend e mongo per rendere disponibile il challenge HTTP:
+> Apri anche le porte 80 e 443 nelle regole di sicurezza della console del cloud provider.
+
+**Step 6: Avvia frontend e mongo per rendere disponibile il challenge HTTP**
 
 ```bash
 docker compose up -d frontend mongo
 ```
 
-**Passaggio 7:** Esegui Certbot per ottenere il certificato SSL:
+**Step 7: Ottieni il certificato SSL tramite Certbot**
 
 ```bash
 docker run --rm \
@@ -551,17 +716,25 @@ docker run --rm \
   -d tuo-dominio.com
 ```
 
-**Passaggio 8:** Se il certificato è stato emesso con successo, avvia l'intero stack:
+**Step 8: Avvia l'intero stack**
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-**Passaggio 9:** Esegui il seed del dataset MIT-BIH (vedi sezione 9.3).
+**Step 9: Popola il database** → esegui il [Passo 9.B](#9b-seed-del-dataset-mit-bih-comune-a-tutti-i-percorsi)
 
-Il sistema sarà raggiungibile su `https://tuo-dominio.com`.
+**Step 10: Verifica lo stato dei container**
 
-### 9.6 Verifica dello stato dei servizi
+```bash
+docker compose ps
+```
+
+Il sistema è raggiungibile su: **`https://tuo-dominio.com`**
+
+---
+
+### 9.C Verifica dello stato dei servizi
 
 ```bash
 # Stato container
@@ -570,7 +743,9 @@ docker compose ps
 # Log in tempo reale
 docker compose logs -f prediction-service
 docker compose logs -f history-service
+docker compose logs -f frontend
 ```
+
 
 ---
 
