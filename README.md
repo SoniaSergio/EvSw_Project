@@ -468,6 +468,9 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
 
 **Prerequisiti:** Docker Engine 24+, Docker Compose v2, Git.
 
+> **Nota:** Python 3.x è necessario solo per generare la `ENCRYPTION_KEY` (vedere sezione 10).
+> Non è richiesto per avviare i container.
+
 > **Nota (Windows / macOS):** Docker Engine non gira nativamente su questi sistemi.
 > È necessario installare e tenere **Docker Desktop attivo in background** prima di
 > eseguire qualsiasi comando `docker` o `docker compose` — il daemon è ospitato
@@ -522,7 +525,10 @@ Non è necessario modificare alcun file di configurazione Nginx manualmente: l'`
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
-copy .env.example .env
+
+copy .env.example .env   # Windows CMD
+
+cp .env.example .env     # Linux/macOS
 ```
 
 Apri `.env` e imposta:
@@ -531,10 +537,33 @@ Apri `.env` e imposta:
 NGINX_MODE=http
 SERVER_NAME=localhost
 CERTBOT_PATH=./certbot/empty
-ENCRYPTION_KEY=   # genera con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ENCRYPTION_KEY= ...  
 ```
 
+Per generare la ENCRYPTION_KEY : 
+
+```bash
+pip install cryptography          # Windows
+
+pip3 install cryptography         # Linux/macOS (se pip non è mappato)
+
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+La prima riga serve solo se`cryptography` non è installato nell'ambiente Python locale.
+
 **Step 2: Posiziona i modelli scaricati**
+
+
+Crea la cartella models:
+
+```bash
+mkdir prediction-service/models           # Windows CMD
+
+mkdir -p prediction-service/models        # Linux/macOS
+```
 
 Trascina `ecg_cnn_model.h5` e `ecg_rf_model.pkl` nella cartella `prediction-service/models/`.
 
@@ -578,6 +607,13 @@ ENCRYPTION_KEY=     # genera come indicato sopra
 ```
 
 **Step 3: Posiziona i modelli scaricati**
+
+
+Crea la cartella models:
+
+```bash
+mkdir prediction-service/models
+```
 
 Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli dal tuo computer al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
@@ -632,6 +668,13 @@ ENCRYPTION_KEY=     # genera come indicato sopra
 ```
 
 **Step 3: Posiziona i modelli scaricati**
+
+
+Crea la cartella models:
+
+```bash
+mkdir prediction-service/models
+```
 
 Usa un client SFTP per trasferire i due modelli al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
