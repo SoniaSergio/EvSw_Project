@@ -310,6 +310,19 @@ body {
 }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 
+.btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+}
+
 /* ── Loader dots ─────────────────────────────────────────────────────────── */
 .btn-loader { display: inline-flex; gap: 4px; align-items: center; }
 .dot {

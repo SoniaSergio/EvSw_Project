@@ -20,9 +20,13 @@ const MIT_LABEL_MAP = {
   '4': 'Q (Non classificabile)',
 };
 
+let lastPredictionResult = null;
+window.lastPredictionResult = null; // esponi globalmente
+
 /* ── Stato ground truth corrente ─────────────────────────────────────────── */
 // Stringa o null — viene passato all'API e usato nel banner risultati
 let currentGroundTruth = null;
+
 
 function setGroundTruth(value) {
   // Normalizza: se è un numero MIT-BIH (es. "2") → stringa leggibile
@@ -246,6 +250,13 @@ function setLoading(on) {
 
 /* ── Render results ──────────────────────────────────────────────────────── */
 function renderResults(data, groundTruth) {
+  lastPredictionResult = {
+    timestamp: new Date().toISOString(),
+    ground_truth: groundTruth || null,
+    cnn: data.cnn,
+    rf: data.rf,
+  };
+  window.lastPredictionResult = lastPredictionResult;
   document.getElementById('results-section').classList.remove('hidden');
   renderModel('cnn', data.cnn);
   renderModel('rf',  data.rf);
@@ -357,3 +368,15 @@ async function loadHistory() {
     list.innerHTML = `<div class="empty-state">Errore nel caricamento: ${err.message}</div>`;
   }
 }
+
+document.getElementById('btn-export-json').onclick = function() {
+  if (!window.lastPredictionResult) return;
+  const json = JSON.stringify(window.lastPredictionResult, null, 2);
+  const ts   = new Date().toISOString().replace(/[:.]/g, '-');
+  const a    = document.createElement('a');
+  a.href     = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  a.download = `ecg-prediction-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};

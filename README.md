@@ -236,9 +236,9 @@ Output: distribuzione di probabilita sulle 5 classi
 
 Media, skewness e kurtosis contribuiscono a oltre il 65% della capacita discriminativa (Gini importance), ma soffrono di elevata sovrapposizione distributiva tra le classi N, S e V — limite strutturale che il modello CNN supera operando localmente sul segnale.
 
-### 6.3 Stato di affidabilita
+### 6.3 Stato di affidabilità
 
-Entrambi i modelli espongono uno **stato di affidabilita** basato su soglia fissa:
+Entrambi i modelli espongono uno **stato di affidabilità** basato su soglia fissa:
 
 - **Confidenza >= 0.60** → `"Diagnosi ad alta confidenza"`
 - **Confidenza < 0.60** → `"Bassa confidenza (Revisione clinica raccomandata)"`
@@ -380,7 +380,9 @@ Il sistema supporta tre modalità di caricamento del segnale ECG:
 
 ### 8.2 Risultati diagnostici
 
-Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e Random Forest: diagnosi, confidenza con barra grafica, distribuzione di probabilità sulle 5 classi e badge di affidabilità. Un banner segnala l'accordo o il disaccordo tra i due modelli; se il ground truth è disponibile, un secondo banner confronta le predizioni con la classe reale.
+Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e Random Forest: diagnosi, confidenza con barra grafica, distribuzione di probabilità sulle 5 classi e badge di affidabilità. Un banner segnala l'accordo o il disaccordo tra i due modelli; se il ground truth è disponibile, un secondo banner confronta le predizioni con la classe reale. Il pulsante 
+
+**Esporta JSON** consente di scaricare il risultato completo (timestamp, ground truth, output CNN e RF con distribuzione di probabilità) in formato strutturato, pronto per l'integrazione con sistemi EHR o pipeline di analisi esterne.
 
 ![Esempio predizione](docs/esempio-predizione.png)
 
