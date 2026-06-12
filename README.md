@@ -428,12 +428,34 @@ Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate
 
 ### 8.4 Scenari clinici esemplificativi
 
-| Scenario | Input | Risultato atteso |
-|:---|:---|:---|
-| **Battito normale, alta confidenza** | Segnale classe N | CNN e RF concordano → banner verde "Modelli concordi" |
-| **Aritmia ventricolare** | Segnale classe V | CNN: V (0.91) · RF: N (0.87) → banner giallo "Modelli discordi", revisione raccomandata |
-| **Bassa confidenza RF** | Segnale classe F (Fusion) | RF confidenza < 0.60 → badge "Revisione clinica raccomandata" |
+Poiché l'applicazione è ospitata su una piattaforma web pubblica e potenzialmente accessibile da chiunque, l'usabilità e la sicurezza del sistema sono state testate simulando due diverse tipologie di utenti finali (Persona): l'utente comune (paziente/laico) e l'operatore sanitario (medico).
 
+#### TARGET A: Utente Comune 
+L'obiettivo per questo target è l'esplorazione del sistema in sicurezza, evitando l'autodiagnosi errata o il panico dovuto a interpretazioni sbagliate.
+
+* **Test A.1: Primo Approccio e Funzione "Esempio Casuale"**
+  * **Obiettivo:** Permettere a un utente qualunque di testare l'applicazione senza possedere un file ECG proprietario.
+  * **Azione Utente:** Un utente generico clicca sul pulsante "Carica Esempio Casuale" per popolare i campi e poi clicca su "Classifica".
+  * **Risultato Atteso:** L'interfaccia si compila istantaneamente con un tracciato pre-estratto dal dataset MIT-BIH. L'utente ottiene la classificazione visiva (grafici) senza incontrare blocchi o errori di formattazione.
+
+* **Test A.2: Prevenzione dell'Allarmismo (Medical Safety)**
+  * **Obiettivo:** Verificare che l'interfaccia comunichi l'anomalia in modo responsabile a un utente non medico.
+  * **Azione Utente:** Il sistema classifica un battito come `Ventricolare (V)`.
+  * **Risultato Atteso:** Oltre ai dati tecnici, l'interfaccia mostra un disclaimer chiaro e leggibile, garantendo un contesto d'uso sicuro e mitigando i rischi di un uso non supervisionato.
+
+#### TARGET B: Operatore Sanitario (Medico / Ricercatore)
+L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e l'analisi dei casi limite (Edge Cases).
+
+* **Test B.1: Caricamento File di Diagnosi Esterno (Formato CSV)**
+  * **Obiettivo:** Verificare che un cardiologo possa importare un battito specifico registrato da un altro software.
+  * **Azione Utente:** Il medico trascina un file `.csv` contenente esattamente i 187 valori numerici del segnale ECG normalizzato nell'area di drop-zone.
+  * **Risultato Atteso:** Il frontend valida il file in frazioni di secondo, disegna l'anteprima del tracciato d'onda nell'interfaccia e abilita il pulsante di analisi.
+
+* **Test B.2: Risoluzione della Discordia tra Modelli**
+  * **Obiettivo:** Aiutare il medico a prendere una decisione nel minor tempo possibile quando CNN e Random Forest non sono d'accordo.
+  * **Azione Utente:** Viene caricato un battito d'esempio ambiguo; la CNN predice `Sopraventricolare (S)` e il Random Forest predice `Normale (N)`.
+  * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo di colore giallo. Il sistema non sceglie per il medico, ma presenta i dati in modo chiaro affinché il professionista possa fare da "arbitro", ottimizzando l'efficienza del processo decisionale.
+  
 ---
 
 ## 9. Guida all'Installazione
