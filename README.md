@@ -51,7 +51,9 @@ La parola "ectopico" deriva dal greco *ek* e *topos* (letteralmente "fuori posto
 I modelli tradizionali tendono a massimizzare l'accuratezza globale, ignorando le minoranze patologiche. Ciò si traduce in un inaccettabile tasso di falsi negativi sulle aritmie critiche, compromettendo gravemente la sicurezza diagnostica del paziente.
 
 ### Paradigmi a Confronto
-Dal punto di vista dell'Ingegneria del Software, questo sistema è concepito non solo come un progetto isolato, ma come un vero e proprio prodotto software: un sistema generico nato per cogliere un'opportunità di business (il supporto clinico rapido) in grado di fornire funzionalità utili a una vasta gamma di utenti medici, garantendo scalabilità e manutenibilità a lungo termine.
+
+Dal punto di vista dell'Ingegneria del Software, questo sistema è concepito come un prodotto software in contrapposizione a un progetto su commissione: non esiste un cliente esterno che genera requisiti, ma un'esigenza reale nel dominio clinico che guida le scelte di sviluppo. La product vision risponde alle tre domande fondamentali: cosa (classificatore ECG automatico), chi (operatori sanitari e ricercatori), perché (ridurre i falsi negativi sulle aritmie critiche rispetto all'analisi manuale).
+
 
 Il progetto affronta la problematica descritta mettendo a confronto due paradigmi opposti di machine learning:
 
@@ -82,6 +84,8 @@ La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispett
 ## 2. Evoluzione Architetturale: da Monolite a Service-Oriented Architecture (SOA)
 
 Il progetto nasce come prototipo monolitico (un'unica applicazione Gradio su Google Colab), in cui interfaccia, logica di business e accesso ai dati erano strettamente accoppiati. Questa versione rappresenta la sua evoluzione in un sistema distribuito, riprogettato secondo i principi della **Service-Oriented Architecture (SOA)** e ispirato ai pattern a microservizi.
+
+L'architettura a microservizi risolve due problemi strutturali delle applicazioni monolitiche identificati nella letteratura: in un monolite, ogni modifica richiede ricostruzione, rtest e ridistribuzione dell'intero sistema; con l'aumentare del carico, l'intero sistema deve essere scalato anche se la domanda è localizzata su pochi componenti. La decomposizione in servizi autonomi a singola responsabilità (SRP) risolve entrambi: ogni microservizio può essere arrestato, aggiornato e riavviato indipendentemente, e replicato selettivamente in caso di picco di carico.
 
 Il sistema è stato decomposto in servizi a grana fine, autonomi e debolmente accoppiati (loose coupling), comunicanti tramite API RESTful (HTTP). Questa scomposizione architetturale porta vantaggi fondamentali:
 * **Alta Coesione e Basso Accoppiamento:** Ogni servizio ha una singola responsabilità (SRP - Single Responsibility Principle). Il `prediction-service` si occupa solo dell'inferenza, mentre l'`history-service` gestisce solo lo storage e il recupero dati.
@@ -122,6 +126,8 @@ Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge de
   <img src="./docs/architettura.png" width="700" alt="Architettura ECG Arrhythmia Classifier">
 </p>
 
+Seguendo il principio dell'architettura a livelli, i componenti al livello X interagiscono esclusivamente con le API dei componenti al livello X-1: il frontend non accede mai direttamente a MongoDB, ma passa sempre attraverso i microservizi. Questo garantisce disaccoppiamento, sostituibilità dei livelli e sicurezza per livelli (un attaccante che compromette il frontend non ha accesso diretto al database).
+
 Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
 ### Attributi di qualità
@@ -133,6 +139,9 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 | **Resilience** | Isolamento Docker: il crash di un servizio non propaga il guasto agli altri |
 | **Scalability** | Architettura orientata ai servizi su cloud: ogni microservizio è scalabile orizzontalmente in modo indipendente |
 | **Responsiveness** | Comunicazione sincrona diretta tra servizi, senza broker intermedi — latenza media < 200 ms |
+| **Availability** | I container Docker sono configurati con restart: always — in caso di crash, il daemon li riavvia automaticamente senza intervento manuale|
+| **Reliability** | Isolamento dei guasti tra servizi + validazione input tramite Pydantic ad ogni chiamata API, che previene stati inconsistenti|
+| **Usability** | Interfaccia SPA con tre modalità di input, feedback visivo in tempo reale, badge di affidabilità e disclaimer clinico per utenti non esperti|
 
 ### Decisioni architetturali
 
@@ -144,6 +153,9 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 
 4. **ALDE come pattern di sicurezza trasversale** — la cifratura è implementata nel service layer, non delegata al database. Questo garantisce che i dati siano illeggibili anche in caso di compromissione diretta di MongoDB, senza dipendere dalle funzionalità di sicurezza del DB.
 
+5. **FastAPI come framework API** — scelto per il supporto async nativo (necessario per Motor/MongoDB) e la validazione Pydantic integrata, a differenza di Flask che richiederebbe librerie aggiuntive per entrambe le funzionalità.
+
+6. **CNN 1D come modello primario** — nonostante la maggiore complessità rispetto al Random Forest, la CNN 1D riduce dell'83% i falsi negativi sulla classe Ventricolare, giustificando la scelta in un contesto clinico dove i falsi negativi hanno conseguenze gravi.
 
 ### Flusso di una predizione
 
@@ -859,7 +871,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **"Bind for 0.0.0.0:80 failed: port is already allocated"** | Un altro servizio host (es. Apache o un Nginx locale) sta già occupando la porta 80. | Fermare il servizio in conflitto (es. `sudo systemctl stop apache2` o `sudo systemctl stop nginx`), oppure modificare le porte esposte nel file `docker-compose.yml`. |
 | **Nginx non parte / configurazione errata** | `entrypoint.sh` ha line endings Windows (CRLF). | Eseguire `sed -i 's/\r//' frontend/entrypoint.sh` e rebuilare con `docker compose up -d --build --force-recreate frontend`. |
 | **exec /entrypoint.sh: no such file or directory** | Line endings Windows (CRLF) nel file .sh. | In VSCode aprire entrypoint.sh, cambiare CRLF → LF in basso a destra, salvare e rebuilare. Il file .gitattributes nel repo previene il problema automaticamente. |
-| InvalidToken / cryptography.fernet.InvalidToken sull'history-service | La ENCRYPTION_KEY nel .env è stata cambiata dopo che i dati erano già stati cifrati con una chiave precedente. | Svuotare il database e rieseguire il seed: `docker compose exec mongo mongosh ecgdb --eval "db.predictions.drop(); db.ecg_samples.drop()"` poi `docker compose build seed` && `docker compose up seed` |
+| **InvalidToken / cryptography.fernet.InvalidToken sull'history-service** | La ENCRYPTION_KEY nel .env è stata cambiata dopo che i dati erano già stati cifrati con una chiave precedente. | Svuotare il database e rieseguire il seed: `docker compose exec mongo mongosh ecgdb --eval "db.predictions.drop(); db.ecg_samples.drop()"` poi `docker compose build seed` && `docker compose up seed` |
 
 ---
  
