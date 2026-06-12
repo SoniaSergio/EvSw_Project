@@ -468,6 +468,13 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
 
 **Prerequisiti:** Docker Engine 24+, Docker Compose v2, Git.
 
+> **Nota (Windows / macOS):** Docker Engine non gira nativamente su questi sistemi.
+> È necessario installare e tenere **Docker Desktop attivo in background** prima di
+> eseguire qualsiasi comando `docker` o `docker compose` — il daemon è ospitato
+> internamente da Docker Desktop tramite una VM Linux (WSL2 su Windows, Virtualization
+> Framework su macOS). Su **Linux** è sufficiente avviare il servizio con
+> `sudo systemctl start docker`.
+
 > Il sistema gira interamente in container Docker — non è necessario alcun ambiente Python locale per avviarlo.
 
 Il processo di installazione è diviso in tre fasi: Passaggio Preliminare (da fare sempre), la scelta del Percorso di Esecuzione (in base al tuo ambiente) e i Passaggi Finali.
