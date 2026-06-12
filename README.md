@@ -3,8 +3,8 @@
 ![Deploy](https://img.shields.io/badge/Deploy-ecg.heremy.link-brightgreen)
 ![Docker](https://img.shields.io/badge/Docker-Supported-blue)
 
-> **Classificazione Automatica delle Aritmie ECG**
-> *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata per l'esame di Sistemi Multimediali / Evoluzione del Software — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
+> **Classificazione Automatica delle Aritmie ECG-**
+> *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata precedentemente — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115.5-green) ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16.1-orange) ![MongoDB](https://img.shields.io/badge/MongoDB-7.0-brightgreen) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![Security](https://img.shields.io/badge/Security-AES--256%20ALDE-red) ![HTTPS](https://img.shields.io/badge/HTTPS-Let's_Encrypt-yellow)
 
@@ -36,14 +36,29 @@
 
 **ECG Arrhythmia Classifier** è un sistema web di supporto diagnostico per la classificazione automatica delle aritmie cardiache a partire da segnali ECG del dataset standard **MIT-BIH Arrhythmia Database** (87.554 campioni, 5 classi, 360 Hz).
 
+### Contesto Clinico e Motivazione
+Le patologie cardiovascolari rappresentano una delle principali cause di mortalità e ospedalizzazione a livello globale, rendendo lo screening tempestivo e il monitoraggio continuo strumenti imprescindibili per la prevenzione clinica. 
+In questo contesto, l'elettrocardiogramma (ECG) si configura come l'esame diagnostico non invasivo fondamentale per l'identificazione delle aritmie cardiache. 
+Tuttavia, l'analisi manuale di tracciati ECG a lungo termine richiede tempi prolungati e un'elevata competenza specialistica, introducendo il rischio di sviste dettate dal carico di lavoro del personale medico.
+L'introduzione di sistemi di elaborazione digitale e di algoritmi di classificazione automatica risponde alla necessità clinica di disporre di strumenti di supporto decisionale rapidi, affidabili e operanti in tempo reale.
+
+### Il Problema dello Sbilanciamento delle Classi
+Il dataset MIT-BIH Arrhythmia costituisce lo standard di riferimento assoluto per l'addestramento e la validazione di tali modelli computazionali. 
+Nonostante ciò, l'analisi predittiva in scenari reali è ostacolata da un evidente sbilanciamento delle classi. 
+All'interno dei dataset clinici, la classe dei battiti normali risulta dominante rispetto alle minoranze patologiche, quali i battiti ectopici ventricolari o di fusione. 
+La parola "ectopico" deriva dal greco *ek* e *topos* (letteralmente "fuori posto"); infatti, un battito ectopico è una contrazione del cuore che ha origine in una zona anomala, fuori dal suo pacemaker naturale. 
+
+I modelli tradizionali tendono a massimizzare l'accuratezza globale, ignorando le minoranze patologiche. Ciò si traduce in un inaccettabile tasso di falsi negativi sulle aritmie critiche, compromettendo gravemente la sicurezza diagnostica del paziente.
+
+### Paradigmi a Confronto
 Dal punto di vista dell'Ingegneria del Software, questo sistema è concepito non solo come un progetto isolato, ma come un vero e proprio prodotto software: un sistema generico nato per cogliere un'opportunità di business (il supporto clinico rapido) in grado di fornire funzionalità utili a una vasta gamma di utenti medici, garantendo scalabilità e manutenibilità a lungo termine.
 
-Il progetto mette a confronto due paradigmi opposti di machine learning:
+Il progetto affronta la problematica descritta mettendo a confronto due paradigmi opposti di machine learning:
 
-- **Random Forest (RF):** approccio classico basato su feature engineering manuale (9 descrittori morfologici). Offre trasparenza decisionale tramite feature importance, ma soffre di limitata separabilità sulle classi minoritarie patologiche.
-- **CNN 1D:** architettura deep learning end-to-end su 3 blocchi convoluzionali (~204K parametri). Apprende autonomamente le gerarchie di pattern direttamente dal segnale grezzo, abbattendo drasticamente i falsi negativi sulle aritmie critiche.
+- **Random Forest (RF):** approccio classico basato su feature engineering manuale (9 descrittori morfologici). Offre un'elevata trasparenza morfologica, ma richiede una complessa fase di estrazione manuale delle caratteristiche che spesso non riesce a catturare la dinamica non lineare del segnale grezzo, penalizzando le performance complessive.
+- **CNN 1D:** architettura deep learning end-to-end su 3 blocchi convoluzionali (~204K parametri). Garantisce un'estrazione autonoma dei pattern locali direttamente dal segnale grezzo ed elevatissime prestazioni statistiche, abbattendo drasticamente i falsi negativi sulle aritmie critiche.
 
-La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante dell'accuracy globale in presenza di forte sbilanciamento.
+La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante dell'accuracy globale in contesti di forte sbilanciamento delle classi, poiché misura la frazione di battiti patologici reali correttamente identificati dal modello.
 
 | Modello | Accuracy | Macro Recall | Macro F1 | AUC |
 |:---:|:---:|:---:|:---:|:---:|
@@ -57,18 +72,22 @@ La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispett
 
 ### Scelte architetturali motivate
 **MongoDB (NoSQL)** è stato scelto in quanto le strutture dati delle predizioni sono flessibili (il campo `ground_truth` è opzionale) e non richiedono transazioni ACID multi-documento — contesto in cui i database NoSQL sono più adatti rispetto ai relazionali.
+
 **Comunicazione sincrona** tra i servizi: il frontend attende la risposta prima di procedere, scelta adatta a un sistema request-response a bassa latenza come la classificazione ECG in tempo reale.
+
 **Statelessness**: entrambi i microservizi non mantengono stato interno tra le richieste. Lo stato è interamente delegato a MongoDB, il che consente — in linea di principio — la replica e la migrazione dei container senza interruzioni di servizio.
 
 ---
 
-## 2. Evoluzione Architetturale: da Gradio a Microservizi
+## 2. Evoluzione Architetturale: da Monolite a Service-Oriented Architecture (SOA)
 
-Il progetto nasce come prototipo monolitico in cui i modelli erano incapsulati in un'interfaccia interattiva **Gradio** eseguita localmente su Google Colab.
+Il progetto nasce come prototipo monolitico (un'unica applicazione Gradio su Google Colab), in cui interfaccia, logica di business e accesso ai dati erano strettamente accoppiati. Questa versione rappresenta la sua evoluzione in un sistema distribuito, riprogettato secondo i principi della **Service-Oriented Architecture (SOA)** e ispirato ai pattern a microservizi.
 
-Questa versione rappresenta la sua **evoluzione in un sistema distribuito**, riprogettato secondo la definizione formale **IEEE di Architettura Software**: *"L'organizzazione fondamentale di un sistema sw che si concretizza nei suoi componenti, nelle loro relazioni reciproche e con l'ambiente e nei principi che ne guidano la progettazione e l'evoluzione"*.
+Il sistema è stato decomposto in servizi a grana fine, autonomi e debolmente accoppiati (loose coupling), comunicanti tramite API RESTful (HTTP). Questa scomposizione architetturale porta vantaggi fondamentali:
+* **Alta Coesione e Basso Accoppiamento:** Ogni servizio ha una singola responsabilità (SRP - Single Responsibility Principle). Il `prediction-service` si occupa solo dell'inferenza, mentre l'`history-service` gestisce solo lo storage e il recupero dati.
+* **Sviluppo e Rilascio Indipendente:** Modificare il modello di machine learning non richiede il riavvio del servizio di storico o del frontend.
+* **Resilienza ai Guasti (Fault Isolation):** Il crash di un componente (es. il database) non fa necessariamente crollare l'intero sistema, ma degrada solo le funzionalità dipendenti.
 
-Si è passati da un approccio monolitico a un **approccio orientato ai servizi (Service-Oriented Architecture)**, particolarmente adatto per il software basato su cloud, in cui il sistema è stato scomposto in servizi a grana fine, isolati e resilienti ai guasti:
 
 | Aspetto | Versione Gradio iniziale | Versione Attuale (Microservizi) |
 |:---|:---|:---|
@@ -77,7 +96,7 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 | **Persistenza** | Nessuna | MongoDB: storico completo e cifrato |
 | **Architettura** | Monolitica, single-process | 5 servizi indipendenti dockerizzati |
 | **Inferenza** | Sincrona, single-thread | FastAPI async, latenza media < 200 ms |
-| **Scalabilita** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
+| **Scalabilità** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
 | **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + ALDE AES-256: sicurezza come preoccupazione trasversale distribuita su trasporto, service layer e storage |
 | **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da dataset MIT-BIH |
 
@@ -85,8 +104,19 @@ Si è passati da un approccio monolitico a un **approccio orientato ai servizi (
 
 ## 3. Architettura del Sistema e Sicurezza (ALDE)
 
-Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+Il deployment del sistema sfrutta la **Containerizzazione (Docker)**, una tecnologia chiave per lo sviluppo di software cloud-native. Incapsulando ogni microservizio in un container isolato, si garantiscono i seguenti attributi di qualità architetturale:
 
+* **Portabilità e Riproducibilità:** Il paradigma "Build once, run anywhere" risolve il problema delle dipendenze di ambiente (particolarmente critico con librerie pesanti come TensorFlow). L'intero sistema può essere migrato da un ambiente di test locale a un server in produzione senza modifiche al codice.
+* **Scalabilità Orizzontale (Scale-out):** Grazie alla natura *stateless* dei servizi API e all'uso di un reverse proxy (Nginx), l'architettura è predisposta per l'elasticità del Cloud. In caso di picchi di carico, è possibile istanziare repliche multiple del `prediction-service` senza alterare l'infrastruttura di base.
+* **Isolamento delle Risorse:** I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux, garantendo che i processi dei servizi non interferiscano tra loro e semplificando la gestione della rete interna (Docker Bridge Network).
+
+Per implementare e gestire questa architettura cloud-native, il progetto adotta i principi dell'**Infrastructure as Code (IaC)**, definendo gli ambienti di esecuzione in modo dichiarativo e versionabile tramite due strumenti fondamentali:
+
+* **Dockerfile (Definizione del Componente):** Ogni microservizio possiede un proprio `Dockerfile`. Questo documento automatizza la creazione dell'immagine Docker. Specifica l'ambiente di base (es. Python 3.11), installa le dipendenze esatte (`requirements.txt`), espone le porte di rete necessarie e definisce l'entrypoint. Questo approccio elimina l'antipattern "sul mio computer funziona", garantendo l'idempotenza del deployment.
+* **Docker Compose (Orchestrazione Multicontainer):** Mentre il Dockerfile gestisce la singola unità, il `docker-compose.yml` orchestra l'intero sistema distribuito. Agisce come un manifesto dichiarativo che descrive come i 5 servizi interagiscono tra loro. Si occupa del provisioning della rete virtuale (`ecg-net`), della mappatura dei volumi per la persistenza di MongoDB, dell'iniezione delle variabili d'ambiente (dal file `.env`) e della definizione delle dipendenze di avvio (es. Nginx attende che le API siano pronte).
+
+Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+> Il container `seed` non è incluso nel conteggio: è un job di inizializzazione one-shot (`restart: "no"`) che termina dopo aver popolato `ecg_samples`, non un servizio persistente dell'architettura runtime.
 
 <p align="center">
   <img src="./docs/architettura.png" width="700" alt="Architettura ECG Arrhythmia Classifier">
@@ -234,7 +264,7 @@ Output: distribuzione di probabilita sulle 5 classi
 
 150 alberi, profondità massima 15, iperparametro nativo `class_weight='balanced'`. Opera su **9 feature morfologiche** estratte per ogni battito di 187 campioni: media, deviazione standard, skewness, kurtosis, valore massimo, valore minimo, range, energia, zero-crossing rate.
 
-Media, skewness e kurtosis contribuiscono a oltre il 65% della capacita discriminativa (Gini importance), ma soffrono di elevata sovrapposizione distributiva tra le classi N, S e V — limite strutturale che il modello CNN supera operando localmente sul segnale.
+Media, skewness e kurtosis contribuiscono a oltre il 65% della capacità discriminativa (Gini importance), ma soffrono di elevata sovrapposizione distributiva tra le classi N, S e V — limite strutturale che il modello CNN supera operando localmente sul segnale.
 
 ### 6.3 Stato di affidabilità
 
@@ -243,6 +273,10 @@ Entrambi i modelli espongono uno **stato di affidabilità** basato su soglia fis
 - **Confidenza >= 0.60** → `"Diagnosi ad alta confidenza"`
 - **Confidenza < 0.60** → `"Bassa confidenza (Revisione clinica raccomandata)"`
 
+### 6.4 Limitazioni e Sviluppi Futuri
+
+- **Interpretabilità CNN**: la natura black-box del modello convoluzionale apre a future integrazioni di tecniche di *Explainable AI* (XAI), come il **1D Grad-CAM**, per generare mappe di salienza sul segnale ECG e mostrare quale tratto del complesso QRS ha determinato la diagnosi.
+- **Validazione cross-dataset**: i modelli sono addestrati e validati esclusivamente sul dataset MIT-BIH. Un'estensione naturale prevede il test su dataset esterni (es. PTB-XL) o su segnali acquisiti da dispositivi wearable, per verificarne la robustezza al variare del rapporto segnale/rumore.
 ---
 
 ## 7. API Reference
@@ -380,9 +414,7 @@ Il sistema supporta tre modalità di caricamento del segnale ECG:
 
 ### 8.2 Risultati diagnostici
 
-Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e Random Forest: diagnosi, confidenza con barra grafica, distribuzione di probabilità sulle 5 classi e badge di affidabilità. Un banner segnala l'accordo o il disaccordo tra i due modelli; se il ground truth è disponibile, un secondo banner confronta le predizioni con la classe reale. Il pulsante 
-
-**Esporta JSON** consente di scaricare il risultato completo (timestamp, ground truth, output CNN e RF con distribuzione di probabilità) in formato strutturato, pronto per l'integrazione con sistemi EHR o pipeline di analisi esterne.
+Dopo la classificazione, l'interfaccia mostra in parallelo l'output di CNN 1D e Random Forest: diagnosi, confidenza con barra grafica, distribuzione di probabilità sulle 5 classi e badge di affidabilità. Un banner segnala l'accordo o il disaccordo tra i due modelli; se il ground truth è disponibile, un secondo banner confronta le predizioni con la classe reale.
 
 ![Esempio predizione](docs/esempio-predizione.png)
 
@@ -505,7 +537,7 @@ Apri `.env` e imposta:
 
 ```bash
 NGINX_MODE=http
-SERVER_NAME=        # lascia vuoto o inserisci l'IP del server
+SERVER_NAME= inserisci l'IP del server
 CERTBOT_PATH=./certbot/empty
 ENCRYPTION_KEY=     # genera come indicato sopra
 ```
@@ -671,7 +703,7 @@ Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il
 | `MONGO_URI` | `mongodb://mongo:27017/ecgdb` | URI di connessione MongoDB. In Docker Compose usare il nome del servizio (`mongo`) come host. |
 | `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Generabile con: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 | `NGINX_MODE` | `http` / `https` | Seleziona il template Nginx: `http` per localhost e IP, `https` per produzione con dominio. |
-| `SERVER_NAME` | `localhost` / `ecg.heremy.link` | Dominio o IP del server. Usato dall'entrypoint per compilare il template Nginx. |
+| `SERVER_NAME` | `localhost` / indirizzo IP /`ecg.heremy.link` | Usato dall'entrypoint per compilare il template Nginx. |
 | `CERTBOT_PATH` | `./certbot/empty` / `/etc/letsencrypt` | Percorso dei certificati SSL. Usare `./certbot/empty` per HTTP, `/etc/letsencrypt` per HTTPS. |
 
 ---
