@@ -135,7 +135,7 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 | **Prediction API** | FastAPI + Uvicorn | 0.115.5 / 0.32.1 | Inferenza CNN e RF |
 | **History API** | FastAPI + Uvicorn | 0.115.5 / 0.32.1 | CRUD storico predizioni + campioni casuali |
 | **Deep Learning** | TensorFlow / Keras | 2.16.1 / 3.13.2 | Modello CNN 1D |
-| **Machine Learning** | Scikit-learn + Joblib | 1.5.0 / 1.4.2 | Modello Random Forest |
+| **Machine Learning** | Scikit-learn + Joblib | 1.6.1 / 1.4.2 | Modello Random Forest |
 | **Feature Engineering** | Pandas + NumPy | 2.2.2 / 1.26.4 | Estrazione descrittori morfologici |
 | **Sicurezza / Crittografia** | Cryptography (Fernet) | 42.0.5 | Cifratura simmetrica ALDE AES-256 |
 | **Database** | MongoDB | 7.0 | Persistenza predizioni + campioni MIT-BIH |
@@ -152,97 +152,45 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 
 ```text
 ECG-ARRHYTHMIA-/
-
 ├── frontend/
-
 │   ├── src/
-
-│   │   ├── index.html                   # SPA principale
-
-│   │   ├── app.js                       # Logica UI: input, predizione, storico
-
-│   │   └── style.css                    # Design system (CSS variables, componenti)
-
-│   ├── nginx.http.conf.template         # Configurazione Nginx per HTTP (localhost / IP)
-
-│   ├── nginx.https.conf.template        # Configurazione Nginx per HTTPS (produzione)
-
-│   ├── entrypoint.sh                    # Genera nginx.conf al volo da NGINX_MODE e SERVER_NAME
-
-│   └── Dockerfile                       # Build Nginx Alpine + copia statici + entrypoint
-
+│   │   ├── index.html                    # SPA principale
+│   │   ├── app.js                        # Logica UI: input, predizione, storico
+│   │   └── style.css                     # Design system (CSS variables, componenti)
+│   ├── nginx.http.conf.template          # Template Nginx HTTP (localhost / IP)
+│   ├── nginx.https.conf.template         # Template Nginx HTTPS (produzione)
+│   ├── entrypoint.sh                     # Seleziona il template in base a NGINX_MODE
+│   └── Dockerfile
 │
-
 ├── prediction-service/
-
-│   ├── models/                          # NON incluso nel repo (vedere sezione 9.1)
-
+│   ├── models/                           # NON incluso nel repo (vedere sezione 9.1)
 │   │   ├── ecg_cnn_model.h5
-
 │   │   └── ecg_rf_model.pkl
-
-│   ├── routers/
-
-│   │   └── predict.py
-
+│   ├── routers/predict.py
 │   ├── services/
-
 │   │   ├── cnn_service.py
-
 │   │   ├── rf_service.py
-
-│   │   └── db_service.py
-
+│   │   └── db_service.py                 # Cifratura Fernet + save_prediction()
 │   ├── main.py
-
 │   ├── requirements.txt
-
 │   └── Dockerfile
-
 │
-
 ├── history-service/
-
-│   ├── routers/
-
-│   │   └── history.py
-
-│   ├── services/
-
-│   │   └── db_service.py
-
+│   ├── routers/history.py
+│   ├── services/db_service.py            # Decifratura on-the-fly + get_predictions()
 │   ├── main.py
-
 │   ├── requirements.txt
-
 │   └── Dockerfile
-
 │
-
 ├── seed/
-
-│   ├── Dockerfile
-
-│   ├── seed_db.py
-
-│   └── mitbih_test.csv
-
+│   ├── seed_db.py                        # Popolamento collection ecg_samples (MIT-BIH)
+│   ├── mitbih_test.csv
+│   └── Dockerfile
 │
-
-├── mongo/
-
-│   └── init/
-
-│       └── init.js
-
-│
-
+├── mongo/init/init.js                    # Crea collection predictions + indici
 ├── docker-compose.yml
-
-├── .env                        # Variabili d'ambiente REALI (non committato)
-
-├── .env.example                # Template variabili (committato)
-
+├── .env                                  # Variabili reali (non committato)
+├── .env.example                          # Template variabili (committato)
 └── .gitignore
 ```
 
