@@ -628,8 +628,6 @@ Crea la cartella models:
 mkdir prediction-service/models
 ```
 
-Trascina `ecg_cnn_model.h5` e `ecg_rf_model.pkl` nella cartella `prediction-service/models/`.
-
 Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli dal tuo computer al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
 **Step 4: Apri la porta 80 sul firewall del server**
@@ -861,6 +859,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **"Bind for 0.0.0.0:80 failed: port is already allocated"** | Un altro servizio host (es. Apache o un Nginx locale) sta già occupando la porta 80. | Fermare il servizio in conflitto (es. `sudo systemctl stop apache2` o `sudo systemctl stop nginx`), oppure modificare le porte esposte nel file `docker-compose.yml`. |
 | **Nginx non parte / configurazione errata** | `entrypoint.sh` ha line endings Windows (CRLF). | Eseguire `sed -i 's/\r//' frontend/entrypoint.sh` e rebuilare con `docker compose up -d --build --force-recreate frontend`. |
 | **exec /entrypoint.sh: no such file or directory** | Line endings Windows (CRLF) nel file .sh. | In VSCode aprire entrypoint.sh, cambiare CRLF → LF in basso a destra, salvare e rebuilare. Il file .gitattributes nel repo previene il problema automaticamente. |
+| InvalidToken / cryptography.fernet.InvalidToken sull'history-service | La ENCRYPTION_KEY nel .env è stata cambiata dopo che i dati erano già stati cifrati con una chiave precedente. | Svuotare il database e rieseguire il seed: `docker compose exec mongo mongosh ecgdb --eval "db.predictions.drop(); db.ecg_samples.drop()"` poi `docker compose build seed` && `docker compose up seed` |
 
 ---
  
