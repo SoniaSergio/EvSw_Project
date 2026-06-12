@@ -152,49 +152,97 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 
 ```text
 ECG-ARRHYTHMIA-/
+
 ├── frontend/
+
 │   ├── src/
-│   │   ├── index.html          # SPA principale
-│   │   ├── app.js              # Logica UI: input, predizione, storico
-│   │   └── style.css           # Design system (CSS variables, componenti)
-│   ├── Dockerfile              # Build Nginx Alpine + copia statici
-│   └── nginx.conf              # Reverse proxy, HTTPS, redirect HTTP→HTTPS
+
+│   │   ├── index.html                   # SPA principale
+
+│   │   ├── app.js                       # Logica UI: input, predizione, storico
+
+│   │   └── style.css                    # Design system (CSS variables, componenti)
+
+│   ├── nginx.http.conf.template         # Configurazione Nginx per HTTP (localhost / IP)
+
+│   ├── nginx.https.conf.template        # Configurazione Nginx per HTTPS (produzione)
+
+│   ├── entrypoint.sh                    # Genera nginx.conf al volo da NGINX_MODE e SERVER_NAME
+
+│   └── Dockerfile                       # Build Nginx Alpine + copia statici + entrypoint
+
 │
+
 ├── prediction-service/
-│   ├── models/                 # NON incluso nel repo su GitHub(vedere sezione 9.2)
-│   │   ├── ecg_cnn_model.h5    # Pesi CNN 1D addestrata (TensorFlow/Keras)
-│   │   └── ecg_rf_model.pkl    # Modello Random Forest serializzato (joblib)
+
+│   ├── models/                          # NON incluso nel repo (vedere sezione 9.1)
+
+│   │   ├── ecg_cnn_model.h5
+
+│   │   └── ecg_rf_model.pkl
+
 │   ├── routers/
-│   │   └── predict.py          # POST /predict/ — orchestrazione inferenza
+
+│   │   └── predict.py
+
 │   ├── services/
+
 │   │   ├── cnn_service.py
+
 │   │   ├── rf_service.py
-│   │   └── db_service.py       # Cifratura Fernet e save_prediction()
+
+│   │   └── db_service.py
+
 │   ├── main.py
+
 │   ├── requirements.txt
+
 │   └── Dockerfile
+
 │
+
 ├── history-service/
+
 │   ├── routers/
-│   │   └── history.py          # GET /history/, /history/random, /history/{id}
+
+│   │   └── history.py
+
 │   ├── services/
-│   │   └── db_service.py       # Decifratura on-the-fly, get_predictions(), get_random_ecg_sample()
+
+│   │   └── db_service.py
+
 │   ├── main.py
+
 │   ├── requirements.txt
+
 │   └── Dockerfile
+
 │
+
 ├── seed/
-│   ├── Dockerfile              # Immagine Python con pandas, pymongo, cryptography
-│   ├── seed_db.py              # Script di popolamento collection ecg_samples
-│   └── mitbih_test.csv         
+
+│   ├── Dockerfile
+
+│   ├── seed_db.py
+
+│   └── mitbih_test.csv
+
 │
+
 ├── mongo/
+
 │   └── init/
-│       └── init.js             # Crea collection predictions + indici MongoDB
+
+│       └── init.js
+
 │
-├── docker-compose.yml          # Orchestrazione: mongo, prediction, history, frontend, certbot, seed
+
+├── docker-compose.yml
+
 ├── .env                        # Variabili d'ambiente REALI (non committato)
+
 ├── .env.example                # Template variabili (committato)
+
 └── .gitignore
 ```
 
@@ -425,21 +473,30 @@ I file da scaricare e tenere pronti sono:
 1. `ecg_cnn_model.h5` — pesi della rete neurale convoluzionale
 2. `ecg_rf_model.pkl` — modello Random Forest serializzato
 
-*(Inserirai questi file nella cartella corretta del progetto nei passaggi successivi, in base al percorso scelto).*
+*(Inserirai questi file nella cartella `prediction-service/models/` nei passaggi successivi.)*
 
 ---
 
-### 9.2 Scelta del Percorso di Esecuzione 
+### 9.2 Scelta del Percorso di Esecuzione
 
-Scegli **uno solo** dei seguenti percorsi in base all'ambiente in cui vuoi far girare l'applicazione: 
+Scegli **uno solo** dei seguenti percorsi in base all'ambiente in cui vuoi far girare l'applicazione:
 
-- **Percorso A - Localhost:** testi il progetto sul tuo computer locale. 
-- **Percorso B - Server via IP (HTTP):** se hai un server remoto ma non possiedi un dominio configurato. 
-- **Percorso C - Server con dominio (HTTPS):** richiede un server remoto con dominio associato per generare il certificato SSL (percorso scelto per il deploy originale su Oracle Cloud). 
+- **Percorso A - Localhost:** testi il progetto sul tuo computer locale.
+- **Percorso B - Server via IP (HTTP):** se hai un server remoto ma non possiedi un dominio configurato.
+- **Percorso C - Server con dominio (HTTPS):** richiede un server remoto con dominio associato per generare il certificato SSL (percorso scelto per il deploy originale su Oracle Cloud).
+
+La configurazione Nginx viene generata automaticamente all'avvio del container a partire da due variabili nel file `.env`:
+
+| Variabile | Percorso A | Percorso B | Percorso C |
+|:---|:---:|:---:|:---:|
+| `NGINX_MODE` | `http` | `http` | `https` |
+| `SERVER_NAME` | `localhost` | IP del server | `tuo-dominio.com` |
+
+Non è necessario modificare alcun file di configurazione Nginx manualmente: l'`entrypoint.sh` seleziona il template corretto (`nginx.http.conf.template` o `nginx.https.conf.template`) e lo compila con i valori del `.env` ad ogni avvio del container.
 
 ---
 
-#### Percorso A - Localhost
+#### Percorso A — Localhost
 
 **Step 1: Clona il repository e configura l'ambiente**
 
@@ -447,56 +504,34 @@ Scegli **uno solo** dei seguenti percorsi in base all'ambiente in cui vuoi far g
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
 cp .env.example .env
-# Apri .env e inserisci la tua ENCRYPTION_KEY (vedi sezione 10)
 ```
-E verifica la variabile `CERTBOT_PATH` nel file `.env`
+
+Apri `.env` e imposta:
 
 ```bash
-# Nel file .env deve essere impostato:
+NGINX_MODE=http
+SERVER_NAME=localhost
 CERTBOT_PATH=./certbot/empty
+ENCRYPTION_KEY=   # genera con: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-***Step 2: Posiziona i modelli scaricati**
+**Step 2: Posiziona i modelli scaricati**
 
-Trascina i due file dei modelli (ecg_cnn_model.h5 e ecg_rf_model.pkl) che hai scaricato al punto 9.1 all'interno della cartella prediction-service/models/ appena clonata.
+Trascina `ecg_cnn_model.h5` e `ecg_rf_model.pkl` nella cartella `prediction-service/models/`.
 
-***Step 3: Sostituisci la configurazione Nginx con la versione HTTP locale**
-
-Il file nginx.conf di default è per il deploy. Sovrascrivilo con questo comando: 
-
-```bash
-cat > frontend/nginx.conf << 'EOF'
-server {
-    listen 80;
-    server_name localhost;
-
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/predict/ {
-        proxy_pass http://prediction-service:8000/predict/;
-    }
-
-    location /api/history/ {
-        proxy_pass http://history-service:8001/history/;
-    }
-}
-EOF
-```
-**Step 4: Avvia tutti i servizi**
+**Step 3: Avvia tutti i servizi**
 
 ```bash
 docker compose up -d --build
 ```
 
 Il frontend è accessibile su: **`http://localhost`**
-Ora passa alla sezione 9.3. 
+
+Ora passa alla sezione 9.3.
+
 ---
 
-#### Percorso B - Server via IP (HTTP)
+#### Percorso B — Server via IP (HTTP)
 
 **Step 1: Preparazione del server (solo al primo accesso)**
 
@@ -512,54 +547,41 @@ newgrp docker
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
 cp .env.example .env
-# Apri .env e inserisci la tua ENCRYPTION_KEY (vedi sezione 10)
 ```
-**Step 3: Posiziona i modelli scaricati in models**
 
-Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli scaricati al punto 9.1 dal tuo computer al server remoto. Inseriscili nel percorso: ~/EvSw_Project/prediction-service/models/.
-
-**Step 4: Sostituisci la configurazione Nginx con la versione HTTP**
+Apri `.env` e imposta:
 
 ```bash
-cat > frontend/nginx.conf << 'EOF'
-server {
-    listen 80;
-    server_name localhost;
-
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/predict/ {
-        proxy_pass http://prediction-service:8000/predict/;
-    }
-
-    location /api/history/ {
-        proxy_pass http://history-service:8001/history/;
-    }
-}
-EOF
+NGINX_MODE=http
+SERVER_NAME=        # lascia vuoto o inserisci l'IP del server
+CERTBOT_PATH=./certbot/empty
+ENCRYPTION_KEY=     # genera come indicato sopra
 ```
 
-**Step 5: Apri la porta 80 sul firewall del server**
+**Step 3: Posiziona i modelli scaricati**
+
+Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli dal tuo computer al percorso `~/EvSw_Project/prediction-service/models/` sul server.
+
+**Step 4: Apri la porta 80 sul firewall del server**
 
 ```bash
 sudo firewall-cmd --permanent --add-port=80/tcp
 sudo firewall-cmd --reload
 ```
 
-> Se usi un cloud provider, ricorda di aprire anche la porta 80 nelle regole di sicurezza/Security Groups della console web (es. Oracle Cloud → Virtual Cloud Network → Security Lists).
+> Se usi un cloud provider, apri anche la porta 80 nelle regole di sicurezza della console web (es. Oracle Cloud → Virtual Cloud Network → Security Lists).
 
-**Step 6: Avvia tutti i servizi**
+**Step 5: Avvia tutti i servizi**
 
 ```bash
 docker compose up -d --build
 ```
-Il frontend è accessibile su: **`http://IP_DEL_SERVER`**
-Ora passa alla sezione 9.3. 
 
+Il frontend è accessibile su: **`http://IP_DEL_SERVER`**
+
+Ora passa alla sezione 9.3.
+
+---
 
 #### Percorso C — Server con dominio (HTTPS)
 
@@ -579,11 +601,20 @@ newgrp docker
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
 cp .env.example .env
-# Apri .env e inserisci la tua ENCRYPTION_KEY, MONGO_URI e assicurati di impostare CERTBOT_PATH=/etc/letsencrypt.
 ```
-**Step 3: Posiziona i modelli scaricati in models**
 
-Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli scaricati al punto 9.1 dal tuo computer al server remoto. Inseriscili nel percorso: ~/EvSw_Project/prediction-service/models/.
+Apri `.env` e imposta:
+
+```bash
+NGINX_MODE=https
+SERVER_NAME=tuo-dominio.com
+CERTBOT_PATH=/etc/letsencrypt
+ENCRYPTION_KEY=     # genera come indicato sopra
+```
+
+**Step 3: Posiziona i modelli scaricati**
+
+Usa un client SFTP per trasferire i due modelli al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
 **Step 4: Crea le cartelle per Certbot sull'host e apri le porte**
 
@@ -597,7 +628,6 @@ sudo firewall-cmd --reload
 
 > Apri anche le porte 80 e 443 nelle regole di sicurezza della console del cloud provider.
 
-
 **Step 5: Ottieni il certificato SSL tramite Certbot**
 
 Avvia prima i servizi necessari al challenge HTTP:
@@ -605,6 +635,7 @@ Avvia prima i servizi necessari al challenge HTTP:
 ```bash
 docker compose up -d frontend mongo
 ```
+
 Ed esegui Certbot:
 
 ```bash
@@ -624,7 +655,10 @@ docker run --rm \
 ```bash
 docker compose up -d --build
 ```
+
 Il sistema è raggiungibile su: **`https://tuo-dominio.com`**
+
+Ora passa alla sezione 9.3.
 
 ---
 
@@ -638,17 +672,19 @@ Esegui il seed (va fatto una sola volta, lo script eviterà eventuali duplicati)
 docker compose build seed
 docker compose up seed
 ```
-Attendi il messaggio: Inseriti X campioni in ecg_samples. (Se appare Seed già eseguito, skip. significa che i dati sono già presenti).
 
-Verifica l'inserimento: 
+Attendi il messaggio: `Inseriti X campioni in ecg_samples.` (Se appare `Seed già eseguito, skip.` significa che i dati sono già presenti).
+
+Verifica l'inserimento:
 
 ```bash
 docker exec -it ecg-mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
 # Deve restituire circa 21892
 ```
+
 ---
 
-### 9.4 Verifica dello stato dei servizi 
+### 9.4 Verifica dello stato dei servizi
 
 Per controllare che tutto stia funzionando correttamente:
 
@@ -662,17 +698,26 @@ docker compose logs -f history-service
 docker compose logs -f frontend
 ```
 
+Per verificare che l'entrypoint abbia generato correttamente la configurazione Nginx:
+
+```bash
+docker compose logs frontend
+# Deve apparire: Nginx mode: <http|https>, server: <SERVER_NAME>
+```
+
 ---
 
 ## 10. Variabili d'Ambiente
 
 Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il file `.env` è incluso nel `.gitignore` e non deve essere mai committato.
 
-| Variabile | Default / Esempio | Descrizione |
+| Variabile | Esempio | Descrizione |
 |:---|:---|:---|
 | `MONGO_URI` | `mongodb://mongo:27017/ecgdb` | URI di connessione MongoDB. In Docker Compose usare il nome del servizio (`mongo`) come host. |
-| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave simmetrica a 32-byte codificata in URL-safe Base64 per l'algoritmo Fernet (ALDE). Deve essere identica tra locale e server. Generabile con: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
-| `CERTBOT_PATH` | `./certbot/empty` | Percorso dei volumi SSL. Impostare `./certbot/empty` per sviluppo locale (HTTP) o `/etc/letsencrypt` per la produzione (HTTPS). |
+| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Generabile con: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `NGINX_MODE` | `http` / `https` | Seleziona il template Nginx: `http` per localhost e IP, `https` per produzione con dominio. |
+| `SERVER_NAME` | `localhost` / `ecg.heremy.link` | Dominio o IP del server. Usato dall'entrypoint per compilare il template Nginx. |
+| `CERTBOT_PATH` | `./certbot/empty` / `/etc/letsencrypt` | Percorso dei certificati SSL. Usare `./certbot/empty` per HTTP, `/etc/letsencrypt` per HTTPS. |
 
 ---
 
@@ -721,7 +766,8 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **Certbot: `unauthorized` / 404** | Le cartelle `/var/www/certbot` o `/etc/letsencrypt` non esistono sull'host. | Eseguire `sudo mkdir -p /var/www/certbot && sudo mkdir -p /etc/letsencrypt` e riavviare il frontend prima di rieseguire Certbot. |
 | **Seed: `SyntaxError Non-UTF-8`** | Il file `seed_db.py` contiene caratteri accentati o non ASCII. | Riscrivere il file dal server con `cat > seed_db.py << 'EOF'` evitando caratteri non ASCII nel testo. |
 | **"Bind for 0.0.0.0:80 failed: port is already allocated"** | Un altro servizio host (es. Apache o un Nginx locale) sta già occupando la porta 80. | Fermare il servizio in conflitto (es. `sudo systemctl stop apache2` o `sudo systemctl stop nginx`), oppure modificare le porte esposte nel file `docker-compose.yml`. |
- 
+| **Nginx non parte / configurazione errata** | `entrypoint.sh` ha line endings Windows (CRLF). | Eseguire `sed -i 's/\r//' frontend/entrypoint.sh` e rebuilare con `docker compose up -d --build --force-recreate frontend`. |
+
 ---
  
 
