@@ -1,4 +1,4 @@
-#Percorso localhost e server senza dominio 
+# Percorso localhost e server senza dominio 
 
 server {
     listen 80;
@@ -10,10 +10,27 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # --- REGOLE PREDICTION SERVICE ---
+    
+    # Cattura esplicitamente l'health check locale e lo manda a /health
+    location /api/predict/health {
+        proxy_pass http://prediction-service:8000/health;
+    }
+
+    # Tutto il resto va a /predict/
     location /api/predict/ {
         proxy_pass http://prediction-service:8000/predict/;
     }
 
+
+    # --- REGOLE HISTORY SERVICE ---
+    
+    # Cattura esplicitamente l'health check locale e lo manda a /health
+    location /api/history/health {
+        proxy_pass http://history-service:8001/health;
+    }
+
+    # Tutto il resto (lista, random, ID) va a /history/
     location /api/history/ {
         proxy_pass http://history-service:8001/history/;
         proxy_set_header Host $host;

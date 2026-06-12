@@ -222,7 +222,7 @@ ECG-ARRHYTHMIA-/
 ├── .env                                  # Variabili reali (non committato)
 ├── .env.example                          # Template variabili (committato)
 └── .gitignore
-└──  .gitattributes                       #risolve il problema dei line endings (terminatori di riga): Windows usa CRLF (\r\n) per terminare le righe, Linux/Mac usano solo LF (\n). 
+└── .gitattributes                       #risolve il problema dei line endings (terminatori di riga): Windows usa CRLF (\r\n) per terminare le righe, Linux/Mac usano solo LF (\n). 
 
 ```
 
@@ -281,57 +281,53 @@ Entrambi i modelli espongono uno **stato di affidabilità** basato su soglia fis
 
 ## 7. API Reference
 
-### Prediction Service (porta 8000)
+In ambiente di produzione, i microservizi non espongono le loro porte interne (8000 e 8001) verso l'esterno. Tutte le richieste esterne sono gestite dal Reverse Proxy Nginx, che funge da API Gateway instradando il traffico tramite i prefissi `/api/predict/` e `/api/history/`.
 
-#### `POST /predict/`
+---
 
-Esegue l'inferenza con CNN 1D e RF sul segnale ECG fornito e salva il risultato cifrato su MongoDB.
+### Prediction Service (Routing via `/api/predict/`)
+
+#### `POST /api/predict/`
+Esegue l'inferenza sincrona e parallela (CNN 1D e RF) sul segnale ECG fornito e salva il risultato cifrato su MongoDB tramite l'History Service.
 
 **Request body:**
 ```json
 {
-  "signal": [0.123, -0.045, 0.567, "..."],
+  "signal": [0.123, -0.045, 0.567, "... (esattamente 187 valori)"],
   "ground_truth": "N (Normale)"
 }
 ```
 
-> `signal` deve contenere esattamente **187 valori float**. `ground_truth` è opzionale: se presente (es. da CSV MIT-BIH o campione casuale), viene salvato cifrato insieme alla predizione per consentire la validazione clinica a posteriori.
+Response 200 OK:
+Restituisce i risultati di classificazione completi di entrambi i modelli e genera l'id univoco del record.
 
-**Response `200 OK`:**
 ```json
 {
   "cnn": {
-    "diagnosi": "N (Normale)",
-    "confidenza": 0.9823,
-    "distribuzione": {
-      "N (Normale)": 0.9823,
-      "S (Sopraventricolare)": 0.0041,
-      "V (Ventricolare)": 0.0089,
-      "F (Fusion)": 0.0032,
-      "Q (Non classificabile)": 0.0015
-    },
-    "stato_affidabilita": "Diagnosi ad alta confidenza"
+    "diagnosi": "S (Sopraventricolare)",
+    "confidenza": 0.5388,
+    "distribuzione": { "N (Normale)": 0.0775, "S (Sopraventricolare)": 0.5388, "...": "..." },
+    "stato_affidabilita": "Bassa confidenza (Revisione clinica raccomandata)"
   },
   "rf": {
     "diagnosi": "N (Normale)",
-    "confidenza": 0.7200,
+    "confidenza": 0.4469,
     "distribuzione": { "...": "..." },
-    "stato_affidabilita": "Diagnosi ad alta confidenza"
-  }
+    "stato_affidabilita": "Bassa confidenza (Revisione clinica raccomandata)"
+  },
+  "id": "6a2c472ddaa37939a7a01a8a"
 }
 ```
 
-#### `GET /health`
+#### `GET /api/predict/health`
+Endpoint di monitoraggio infrastrutturale per il container di inferenza.
+Response 200 OK: { "status": "ok", "service": "prediction-service" }
 
-```json
-{ "status": "ok", "service": "prediction-service" }
-```
 
----
+### History Service (routing via /api/history)
 
-### History Service (porta 8001)
 
-#### `GET /history/`
+#### `GET  /api/history/`
 
 Ritorna le predizioni salvate, ordinate dalla più recente. Il segnale grezzo è escluso dalla risposta per alleggerire il payload.
 
@@ -360,7 +356,7 @@ Ritorna le predizioni salvate, ordinate dalla più recente. Il segnale grezzo è
 }
 ```
 
-#### `GET /history/{prediction_id}`
+#### `GET /api/history/{prediction_id}`
 
 Ritorna una singola predizione per ID, **incluso il segnale grezzo decifrato**. Utile per il ricaricamento di un segnale dallo storico direttamente nell'interfaccia.
 
@@ -370,7 +366,7 @@ Ritorna una singola predizione per ID, **incluso il segnale grezzo decifrato**. 
 
 **Response `404 Not Found`:** `{ "detail": "Predizione non trovata" }`
 
-#### `GET /history/random`
+#### `GET /api/history/random`
 
 Restituisce un segnale ECG casuale dalla collection `ecg_samples` (dataset MIT-BIH), con il relativo ground truth. Usato dal frontend per la modalità "Esempio casuale".
 
@@ -385,11 +381,21 @@ Restituisce un segnale ECG casuale dalla collection `ecg_samples` (dataset MIT-B
 
 **Response `404 Not Found`:** `{ "detail": "Nessun campione disponibile" }` — indica che il seed non è stato eseguito.
 
-#### `GET /health`
+#### `GET /api/history/health`
 
 ```json
 { "status": "ok", "service": "history-service" }
 ```
+
+### Nota sui Contesti d'Uso (Ambienti di Test)
+
+La struttura delle richieste API (metodi, header e body) rimane identica in ogni ambiente. A seconda di dove si eseguono i comandi `curl`, cambia esclusivamente il **prefisso dell'URL** in base al contesto d'uso:
+
+| Scenario / Contesto | Prefisso URL | Esempio Chiamata (Health Check) |
+| :--- | :--- | :--- |
+| **Produzione Remota (HTTPS)** | `https://ecg.heremy.link/api/` | `curl -i https://ecg.heremy.link/api/predict/health` |
+| **Sviluppo Locale (HTTP via Nginx)** | `http://localhost/api/` | `curl -i http://localhost/api/predict/health` |
+| **Sviluppo Remoto (HTTP via IP)** | `http://<IL-TUO-IP>/api/` | `curl -i http://<IL-TUO-IP>/api/predict/health` |
 
 ---
 ## 8. Frontend: Interfaccia Web
@@ -455,7 +461,7 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
   * **Obiettivo:** Aiutare il medico a prendere una decisione nel minor tempo possibile quando CNN e Random Forest non sono d'accordo.
   * **Azione Utente:** Viene caricato un battito d'esempio ambiguo; la CNN predice `Sopraventricolare (S)` e il Random Forest predice `Normale (N)`.
   * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo di colore giallo. Il sistema non sceglie per il medico, ma presenta i dati in modo chiaro affinché il professionista possa fare da "arbitro", ottimizzando l'efficienza del processo decisionale.
-  
+
 ---
 
 ## 9. Guida all'Installazione
@@ -686,8 +692,8 @@ Verifica l'inserimento:
 ```bash
 docker compose exec mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
 # Deve restituire circa 21892
-#docker compose exec usa il nome del servizio, non del container — funziona sempre indipendentemente dal nome generato.
 ```
+Docker compose exec usa il nome del servizio, non del container — funziona sempre indipendentemente dal nome generato.
 
 ---
 
