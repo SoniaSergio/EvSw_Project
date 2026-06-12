@@ -192,6 +192,8 @@ ECG-ARRHYTHMIA-/
 ├── .env                                  # Variabili reali (non committato)
 ├── .env.example                          # Template variabili (committato)
 └── .gitignore
+└──  .gitattributes                       #risolve il problema dei line endings (terminatori di riga): Windows usa CRLF (\r\n) per terminare le righe, Linux/Mac usano solo LF (\n). 
+
 ```
 
 ---
@@ -451,7 +453,7 @@ Non è necessario modificare alcun file di configurazione Nginx manualmente: l'`
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
 cd EvSw_Project
-cp .env.example .env
+copy .env.example .env
 ```
 
 Apri `.env` e imposta:
@@ -626,13 +628,16 @@ Attendi il messaggio: `Inseriti X campioni in ecg_samples.` (Se appare `Seed gi�
 Verifica l'inserimento:
 
 ```bash
-docker exec -it ecg-mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
+docker compose exec mongo mongosh ecgdb --eval "db.ecg_samples.countDocuments({})"
 # Deve restituire circa 21892
+#docker compose exec usa il nome del servizio, non del container — funziona sempre indipendentemente dal nome generato.
 ```
 
 ---
 
 ### 9.4 Verifica dello stato dei servizi
+
+I nomi dei container sono generati automaticamente da Docker Compose nel formato evsw_project-<servizio>-1. Per interrogare MongoDB direttamente usa il nome corretto visibile in docker compose ps.
 
 Per controllare che tutto stia funzionando correttamente:
 
@@ -676,7 +681,7 @@ Per verificare che i dati siano correttamente cifrati a riposo (Encryption at Re
 Accedere alla shell di MongoDB nel container:
 
 ```bash
-docker exec -it ecg-mongo mongosh
+docker compose exec mongo mongosh
 ```
 
 Selezionare il database e interrogare la collezione:
@@ -705,7 +710,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **Crash "Manca la ENCRYPTION_KEY"** | Il file `.env` non esiste o la variabile non è mappata in Docker Compose. | Assicurarsi di aver copiato `.env.example` in `.env` e aver compilato la chiave Fernet. |
 | **`prediction-service` in crash loop** | File modello `.h5` o `.pkl` mancante o inaccessibile. | Verificare che la cartella `./prediction-service/models/` contenga entrambi i file (`ecg_cnn_model.h5` e `ecg_rf_model.pkl`) e rifare il build con `docker compose up -d --build`. |
 | **"Attese 187 valori, trovati N"** | Il file CSV contiene header o formati non validi. | Verificare che la prima riga contenga esattamente 187 valori numerici separati da virgola (o 188 per formato MIT-BIH). |
-| **Storico sempre vuoto** | Il frontend non raggiunge l'`history-service`. | Controllare che il container `ecg-history` sia in esecuzione (`docker compose ps`) e che `nginx.conf` esegua il proxy corretto. |
+| **Storico sempre vuoto** | Il frontend non raggiunge l'`history-service`. | Controllare che il container history-service sia in esecuzione (`docker compose ps`) e che nginx.conf esegua il proxy corretto. |
 | **Errore HTTPS "certificato non valido"** | Certbot non ha ancora emesso il certificato. | Eseguire prima il challenge HTTP (Step 5 del Percorso C) e verificare che i record DNS puntino all'IP del server. |
 | **Predizione lenta (> 5s) al primo avvio** | Lazy loading di TensorFlow in memoria. | Comportamento normale solo alla prima inferenza dopo l'avvio. Le chiamate successive risponderanno in < 200 ms. |
 | **MongoDB: "Connection refused"** | Race condition all'avvio. | Attendere 10-15 secondi e riavviare: `docker compose restart prediction-service history-service`. |
@@ -715,6 +720,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **Seed: `SyntaxError Non-UTF-8`** | Il file `seed_db.py` contiene caratteri accentati o non ASCII. | Riscrivere il file dal server con `cat > seed_db.py << 'EOF'` evitando caratteri non ASCII nel testo. |
 | **"Bind for 0.0.0.0:80 failed: port is already allocated"** | Un altro servizio host (es. Apache o un Nginx locale) sta già occupando la porta 80. | Fermare il servizio in conflitto (es. `sudo systemctl stop apache2` o `sudo systemctl stop nginx`), oppure modificare le porte esposte nel file `docker-compose.yml`. |
 | **Nginx non parte / configurazione errata** | `entrypoint.sh` ha line endings Windows (CRLF). | Eseguire `sed -i 's/\r//' frontend/entrypoint.sh` e rebuilare con `docker compose up -d --build --force-recreate frontend`. |
+| **exec /entrypoint.sh: no such file or directory** | Line endings Windows (CRLF) nel file .sh. | In VSCode aprire entrypoint.sh, cambiare CRLF → LF in basso a destra, salvare e rebuilare. Il file .gitattributes nel repo previene il problema automaticamente. |
 
 ---
  

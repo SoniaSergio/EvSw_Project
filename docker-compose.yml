@@ -3,7 +3,6 @@ services:
   # ── Database ────────────────────────────────────────────────────────────────
   mongo:
     image: mongo:7.0
-    container_name: ecg-mongo
     restart: unless-stopped
     volumes:
       - mongo_data:/data/db
@@ -12,7 +11,6 @@ services:
       
   seed:
     build: ./seed
-    container_name: ecg-seed
     environment:
       MONGO_URI: mongodb://mongo:27017/ecgdb
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
@@ -27,7 +25,6 @@ services:
   # ── Prediction Service ───────────────────────────────────────────────────────
   prediction-service:
     build: ./prediction-service
-    container_name: ecg-prediction
     restart: unless-stopped
     environment:
       MONGO_URI: mongodb://mongo:27017/ecgdb
@@ -42,7 +39,6 @@ services:
   # ── History Service ──────────────────────────────────────────────────────────
   history-service:
     build: ./history-service
-    container_name: ecg-history
     restart: unless-stopped
     environment:
       MONGO_URI: mongodb://mongo:27017/ecgdb
@@ -52,7 +48,7 @@ services:
     networks:
       - ecg-net
 
-# ── Frontend (Nginx + HTTPS) ─────────────────────────────────────────────────
+  # ── Frontend (Nginx) ─────────────────────────────────────────────────────────
   frontend:
     build: ./frontend
     environment:
@@ -66,15 +62,15 @@ services:
       - "80:80"
       - "443:443"
 
-# ── Certbot (rinnovo automatico certificati) ──────────────────────────────────
+  # ── Certbot (rinnovo automatico certificati) ──────────────────────────────────
   certbot:
     image: certbot/certbot:latest
-    container_name: ecg-certbot
     restart: unless-stopped
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --quiet --webroot -w /var/www/certbot; done'"
+
 # ── Volumes & Networks ────────────────────────────────────────────────────────
 volumes:
   mongo_data:
