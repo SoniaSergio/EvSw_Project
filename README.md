@@ -601,10 +601,23 @@ Apri `.env` e imposta:
 
 ```bash
 NGINX_MODE=http
-SERVER_NAME= inserisci l'IP del server
+SERVER_NAME= inserisci IP del server
 CERTBOT_PATH=./certbot/empty
-ENCRYPTION_KEY=     # genera come indicato sopra
+ENCRYPTION_KEY=     
 ```
+
+Per generare la ENCRYPTION_KEY : 
+
+```bash
+# Windows
+pip install cryptography
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
+pip3 install cryptography
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
 
 **Step 3: Posiziona i modelli scaricati**
 
@@ -614,6 +627,8 @@ Crea la cartella models:
 ```bash
 mkdir prediction-service/models
 ```
+
+Trascina `ecg_cnn_model.h5` e `ecg_rf_model.pkl` nella cartella `prediction-service/models/`.
 
 Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli dal tuo computer al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
@@ -664,8 +679,21 @@ Apri `.env` e imposta:
 NGINX_MODE=https
 SERVER_NAME=tuo-dominio.com
 CERTBOT_PATH=/etc/letsencrypt
-ENCRYPTION_KEY=     # genera come indicato sopra
+ENCRYPTION_KEY= ...
 ```
+
+Per generare la ENCRYPTION_KEY : 
+
+```bash
+# Windows
+pip install cryptography
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
+pip3 install cryptography
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
 
 **Step 3: Posiziona i modelli scaricati**
 
