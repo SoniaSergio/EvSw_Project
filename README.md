@@ -543,12 +543,12 @@ ENCRYPTION_KEY= ...
 Per generare la ENCRYPTION_KEY : 
 
 ```bash
-pip install cryptography          # Windows
-
-pip3 install cryptography         # Linux/macOS (se pip non è mappato)
-
+# Windows
+pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
+# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
+pip3 install cryptography
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
