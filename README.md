@@ -574,9 +574,8 @@ Per generare la ENCRYPTION_KEY :
 # Windows
 pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
 # Linux / macOS possono cambiare in base alla distribuzione scelta
-
+```
 
 La prima riga serve solo se`cryptography` non è installato nell'ambiente Python locale.
 
@@ -632,7 +631,7 @@ pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
 # Linux / macOS possono cambiare in base alla distribuzione scelta
-
+```
 
 **Step 2: Posiziona i modelli scaricati**
 
@@ -694,10 +693,8 @@ Per generare la ENCRYPTION_KEY :
 # Windows
 pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-
 # Linux / macOS possono cambiare in base alla distribuzione scelta
-
+```
 
 **Step 2: Posiziona i modelli scaricati**
 
