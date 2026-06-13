@@ -69,8 +69,13 @@ La metrica primaria adottata è la **macro Recall**, clinicamente più rilevante
 
 > La CNN 1D ottiene risultati superiori in tutte le metriche.
 
-La CNN 1D riduce dell'**83% i falsi negativi sulla classe Ventricolare** rispetto alla RF (Recall: 0.60 → 0.91), la classe a maggiore rischio clinico per il paziente.
-
+| Classe | Recall RF | Recall CNN 1D | Miglioramento | Rischio clinico |
+|:---|:---:|:---:|:---:|:---|
+| N (Normale) | 0.86 | 0.96 | +12% | Basso |
+| S (Sopraventricolare) | 0.51 | 0.83 | +63% | Medio |
+| V (Ventricolare) | 0.60 | 0.91 | **+83%** | **Alto** |
+| F (Fusion) | 0.62 | 0.91 | +47% | Alto |
+| Q (Non classificabile) | 0.84 | 0.98 | +17% | Medio |
 
 ### Scelte architetturali motivate
 **MongoDB (NoSQL)** è stato scelto in quanto le strutture dati delle predizioni sono flessibili (il campo `ground_truth` è opzionale) e non richiedono transazioni ACID multi-documento — contesto in cui i database NoSQL sono più adatti rispetto ai relazionali.
@@ -103,6 +108,7 @@ Il sistema è stato decomposto in servizi a grana fine, autonomi e debolmente ac
 | **Scalabilità** | Non scalabile | Servizi indipendentemente scalabili al variare del carico |
 | **Sicurezza** | Nessuna | HTTPS/TLS 1.3 + ALDE AES-256: sicurezza come preoccupazione trasversale distribuita su trasporto, service layer e storage |
 | **Input** | Manuale o da file locale | Manuale, CSV upload, segnale casuale da dataset MIT-BIH |
+| **Export risultati** | Copia JSON negli appunti | Download diretto del file JSON |
 
 ---
 
@@ -128,7 +134,14 @@ Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge de
 
 Seguendo il principio dell'architettura a livelli, i componenti al livello X interagiscono esclusivamente con le API dei componenti al livello X-1: il frontend non accede mai direttamente a MongoDB, ma passa sempre attraverso i microservizi. Questo garantisce disaccoppiamento, sostituibilità dei livelli e sicurezza per livelli (un attaccante che compromette il frontend non ha accesso diretto al database).
 
-Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM, utilizzando l'algoritmo **AES-256 in modalità CBC/HMAC (Fernet)**. Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
+Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati 
+**prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM. 
+La cifratura utilizza **Fernet**, uno standard crittografico che combina tre meccanismi: 
+**AES-256** per cifrare i dati con una chiave a 256 bit, **CBC** (Cipher Block Chaining) 
+per rendere ogni blocco cifrato dipendente dal precedente — impedendo l'analisi statistica 
+del testo cifrato — e **HMAC** come firma crittografica che garantisce l'integrità dei dati, 
+rendendo rilevabile qualsiasi manomissione del database.**
+Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
 ### Attributi di qualità
 
@@ -145,17 +158,17 @@ Per garantire la confidenzialità dei dati medici, l'architettura implementa il 
 
 ### Decisioni architetturali
 
-1. **Separazione prediction/history service** — i due servizi hanno responsabilità distinte e stack differenti: il prediction-service richiede TensorFlow (~1GB), l'history-service è leggero (~50MB). Separarli permette build e scaling indipendenti senza appesantire inutilmente il container di lettura.
+1. **Separazione prediction/history service** — prediction-service richiede TensorFlow (~1GB), history-service è leggero (~50MB): build e scaling indipendenti.
 
-2. **Database condiviso con collection separate** — a differenza del pattern ideale (un DB per microservizio), si adotta un'istanza MongoDB condivisa con collection distinte (`predictions`, `ecg_samples`). Scelta motivata dalla semplicità operativa per un sistema a basso carico e dall'assenza di transazioni cross-service.
+2. **Database condiviso con collection separate** — semplicità operativa a basso carico; nessuna transazione cross-service richiesta.
 
-3. **Comunicazione sincrona diretta** — i servizi comunicano via HTTP diretto senza broker intermedi (es. RabbitMQ). Adatta a un sistema request-response a bassa latenza; un broker introdurrebbe complessità senza benefici a questo livello di carico.
+3. **Comunicazione sincrona diretta** — request-response a bassa latenza; un broker (es. RabbitMQ) introdurrebbe complessità senza benefici.
 
-4. **ALDE come pattern di sicurezza trasversale** — la cifratura è implementata nel service layer, non delegata al database. Questo garantisce che i dati siano illeggibili anche in caso di compromissione diretta di MongoDB, senza dipendere dalle funzionalità di sicurezza del DB.
+4. **ALDE come pattern di sicurezza trasversale** — cifratura nel service layer, non delegata al DB: i dati restano illeggibili anche in caso di compromissione diretta di MongoDB.
 
-5. **FastAPI come framework API** — scelto per il supporto async nativo (necessario per Motor/MongoDB) e la validazione Pydantic integrata, a differenza di Flask che richiederebbe librerie aggiuntive per entrambe le funzionalità.
+5. **FastAPI** — supporto async nativo (Motor/MongoDB) e validazione Pydantic integrata.
 
-6. **CNN 1D come modello primario** — nonostante la maggiore complessità rispetto al Random Forest, la CNN 1D riduce dell'83% i falsi negativi sulla classe Ventricolare, giustificando la scelta in un contesto clinico dove i falsi negativi hanno conseguenze gravi.
+6. **CNN 1D come modello primario** — riduzione dell'83% dei falsi negativi sulla classe Ventricolare rispetto alla RF, la classe a maggiore rischio clinico.
 
 ### Flusso di una predizione
 
@@ -446,7 +459,7 @@ Il tab **Storico** mostra le ultime 50 predizioni salvate nel database, ordinate
 
 ### 8.4 Scenari clinici esemplificativi
 
-Poiché l'applicazione è ospitata su una piattaforma web pubblica e potenzialmente accessibile da chiunque, l'usabilità e la sicurezza del sistema sono state testate simulando due diverse tipologie di utenti finali (Persona): l'utente comune (paziente/laico) e l'operatore sanitario (medico).
+Poiché l'applicazione è ospitata su una piattaforma web pubblica e potenzialmente accessibile da chiunque, l'usabilità e la sicurezza del sistema sono state testate simulando due diverse tipologie di utenti finali (Persona): l'utente comune e l'operatore sanitario (medico).
 
 #### TARGET A: Utente Comune 
 L'obiettivo per questo target è l'esplorazione del sistema in sicurezza, evitando l'autodiagnosi errata o il panico dovuto a interpretazioni sbagliate.
@@ -472,7 +485,7 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
 * **Test B.2: Risoluzione della Discordia tra Modelli**
   * **Obiettivo:** Aiutare il medico a prendere una decisione nel minor tempo possibile quando CNN e Random Forest non sono d'accordo.
   * **Azione Utente:** Viene caricato un battito d'esempio ambiguo; la CNN predice `Sopraventricolare (S)` e il Random Forest predice `Normale (N)`.
-  * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo di colore giallo. Il sistema non sceglie per il medico, ma presenta i dati in modo chiaro affinché il professionista possa fare da "arbitro", ottimizzando l'efficienza del processo decisionale.
+  * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo di colore giallo in caso di discordanza. Il sistema non fornisce una diagnosi definitiva, ma presenta i dati in modo chiaro per supportare la valutazione clinica del professionista.
 
 ---
 
@@ -817,7 +830,7 @@ Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il
 | Variabile | Esempio | Descrizione |
 |:---|:---|:---|
 | `MONGO_URI` | `mongodb://mongo:27017/ecgdb` | URI di connessione MongoDB. In Docker Compose usare il nome del servizio (`mongo`) come host. |
-| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Generabile con: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
+| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Vedere sezione 9.2 per il comando di generazione. |
 | `NGINX_MODE` | `http` / `https` | Seleziona il template Nginx: `http` per localhost e IP, `https` per produzione con dominio. |
 | `SERVER_NAME` | `localhost` / indirizzo IP /`ecg.heremy.link` | Usato dall'entrypoint per compilare il template Nginx. |
 | `CERTBOT_PATH` | `./certbot/empty` / `/etc/letsencrypt` | Percorso dei certificati SSL. Usare `./certbot/empty` per HTTP, `/etc/letsencrypt` per HTTPS. |
