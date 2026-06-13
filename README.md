@@ -150,9 +150,9 @@ Questo garantisce il principio di **Encryption at Rest**: anche in caso di compr
 | **Security** | HTTPS/TLS 1.3 sul trasporto + ALDE AES-256 a riposo: sicurezza distribuita su più livelli, non affidata a un singolo componente |
 | **Maintainability** | 5 servizi a responsabilità singola — ogni componente può essere modificato, sostituito o scalato indipendentemente |
 | **Resilience** | Isolamento Docker: il crash di un servizio non propaga il guasto agli altri |
-| **Scalability** | Architettura orientata ai servizi su cloud: ogni microservizio è scalabile orizzontalmente in modo indipendente |
+| **Scalability** | Architettura orientata ai servizi su cloud: la statelessness dei servizi e la containerizzazione Docker predispongono il sistema allo scaling orizzontale indipendente per ciascun microservizio |
 | **Responsiveness** | Comunicazione sincrona diretta tra servizi, senza broker intermedi — latenza media < 200 ms |
-| **Availability** | I container Docker sono configurati con restart: always — in caso di crash, il daemon li riavvia automaticamente senza intervento manuale|
+| **Availability** | I container Docker sono configurati con `restart: unless-stopped` — in caso di crash, il daemon li riavvia automaticamente; se fermati manualmente rimangono fermi senza intervento del daemon |
 | **Reliability** | Isolamento dei guasti tra servizi + validazione input tramite Pydantic ad ogni chiamata API, che previene stati inconsistenti|
 | **Usability** | Interfaccia SPA con tre modalità di input, feedback visivo in tempo reale, badge di affidabilità e disclaimer clinico per utenti non esperti|
 
