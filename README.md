@@ -2,6 +2,7 @@
 
 ![Deploy](https://img.shields.io/badge/Deploy-ecg.heremy.link-brightgreen)
 ![Docker](https://img.shields.io/badge/Docker-Supported-blue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > **Classificazione Automatica delle Aritmie ECG-**
 > *Sistema diagnostico comparativo CNN 1D vs Random Forest su segnali elettrocardiografici, evoluzione dell'interfaccia Gradio sviluppata precedentemente — Università degli Studi di Bari "Aldo Moro", A.A. 2025/2026.*
