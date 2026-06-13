@@ -870,6 +870,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 ## 13. Riferimenti Scientifici
 
 - **[MIT-BIH Arrhythmia Database]** G. B. Moody, R. G. Mark — *"The impact of the MIT-BIH arrhythmia database"*, IEEE Engineering in Medicine and Biology Magazine, vol. 20, no. 3, pp. 45-50, 2001.
+  Dataset disponibile su Kaggle: https://www.kaggle.com/datasets/shayanfazeli/heartbeat
 
 - **[Kailan et al., 2025]** — *"Efficient ECG classification based on machine learning and feature selection algorithm for IoT-5G enabled health monitoring systems"*, International Journal of Intelligent Engineering and Systems, vol. 18, no. 1, pp. 1187-1199.
 
