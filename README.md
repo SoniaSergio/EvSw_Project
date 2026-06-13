@@ -118,14 +118,15 @@ Il deployment del sistema sfrutta la **Containerizzazione (Docker)**, una tecnol
 
 * **Portabilità e Riproducibilità:** Il paradigma "Build once, run anywhere" risolve il problema delle dipendenze di ambiente (particolarmente critico con librerie pesanti come TensorFlow). L'intero sistema può essere migrato da un ambiente di test locale a un server in produzione senza modifiche al codice.
 * **Scalabilità Orizzontale (Scale-out):** Grazie alla natura *stateless* dei servizi API e all'uso di un reverse proxy (Nginx), l'architettura è predisposta per l'elasticità del Cloud. In caso di picchi di carico, è possibile istanziare repliche multiple del `prediction-service` senza alterare l'infrastruttura di base.
-* **Isolamento delle Risorse:** I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux, garantendo che i processi dei servizi non interferiscano tra loro e semplificando la gestione della rete interna (Docker Bridge Network).
+* **Isolamento delle Risorse:** I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`), garantendo che i processi dei servizi non interferiscano tra loro e semplificando la gestione della rete interna (Docker Bridge Network).
 
 Per implementare e gestire questa architettura cloud-native, il progetto adotta i principi dell'**Infrastructure as Code (IaC)**, definendo gli ambienti di esecuzione in modo dichiarativo e versionabile tramite due strumenti fondamentali:
 
 * **Dockerfile (Definizione del Componente):** Ogni microservizio possiede un proprio `Dockerfile`. Questo documento automatizza la creazione dell'immagine Docker. Specifica l'ambiente di base (es. Python 3.11), installa le dipendenze esatte (`requirements.txt`), espone le porte di rete necessarie e definisce l'entrypoint. Questo approccio elimina l'antipattern "sul mio computer funziona", garantendo l'idempotenza del deployment.
 * **Docker Compose (Orchestrazione Multicontainer):** Mentre il Dockerfile gestisce la singola unità, il `docker-compose.yml` orchestra l'intero sistema distribuito. Agisce come un manifesto dichiarativo che descrive come i 5 servizi interagiscono tra loro. Si occupa del provisioning della rete virtuale (`ecg-net`), della mappatura dei volumi per la persistenza di MongoDB, dell'iniezione delle variabili d'ambiente (dal file `.env`) e della definizione delle dipendenze di avvio (es. Nginx attende che le API siano pronte).
 
-Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host. I container isolano l'applicazione nello spazio utente sfruttando i meccanismi del kernel Linux (`namespaces` e `cgroups`).
+Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge dedicata (`ecg-net`), isolata dalla rete host.
+
 > Il container `seed` non è incluso nel conteggio: è un job di inizializzazione one-shot (`restart: "no"`) che termina dopo aver popolato `ecg_samples`, non un servizio persistente dell'architettura runtime.
 
 <p align="center">
@@ -503,6 +504,8 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
 > Framework su macOS). Su **Linux** è sufficiente avviare il servizio con
 > `sudo systemctl start docker`.
 
+> **Nota (Linux — Permessi Docker):** Su sistemi Linux, i comandi `docker` richiedono per default i privilegi di root. Per eseguirli senza `sudo`, è necessario aggiungere l'utente corrente al gruppo `docker` (`sudo usermod -aG docker $USER`) e ricaricare il gruppo nella sessione attiva (`newgrp docker`). Questo passaggio è richiesto solo al primo accesso al server.
+
 > Il sistema gira interamente in container Docker — non è necessario alcun ambiente Python locale per avviarlo.
 
 Il processo di installazione è diviso in tre fasi: Passaggio Preliminare (da fare sempre), la scelta del Percorso di Esecuzione (in base al tuo ambiente) e i Passaggi Finali.
@@ -572,10 +575,8 @@ Per generare la ENCRYPTION_KEY :
 pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
-pip3 install cryptography
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
+# Linux / macOS possono cambiare in base alla distribuzione scelta
+
 
 La prima riga serve solo se`cryptography` non è installato nell'ambiente Python locale.
 
@@ -606,15 +607,7 @@ Ora passa alla sezione 9.3.
 
 #### Percorso B — Server via IP (HTTP)
 
-**Step 1: Preparazione del server (solo al primo accesso)**
-
-```bash
-sudo dnf install git -y          # oppure: sudo apt install git -y
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**Step 2: Clona il repository e configura l'ambiente**
+**Step 1: Clona il repository e configura l'ambiente**
 
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
@@ -638,13 +631,10 @@ Per generare la ENCRYPTION_KEY :
 pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
-pip3 install cryptography
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
+# Linux / macOS possono cambiare in base alla distribuzione scelta
 
 
-**Step 3: Posiziona i modelli scaricati**
+**Step 2: Posiziona i modelli scaricati**
 
 
 Crea la cartella models:
@@ -655,7 +645,7 @@ mkdir prediction-service/models
 
 Usa un client SFTP (come MobaXterm o FileZilla) per trasferire i due modelli dal tuo computer al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
-**Step 4: Apri la porta 80 sul firewall del server**
+**Step 3: Apri la porta 80 sul firewall del server**
 
 ```bash
 sudo firewall-cmd --permanent --add-port=80/tcp
@@ -664,7 +654,7 @@ sudo firewall-cmd --reload
 
 > Se usi un cloud provider, apri anche la porta 80 nelle regole di sicurezza della console web (es. Oracle Cloud → Virtual Cloud Network → Security Lists).
 
-**Step 5: Avvia tutti i servizi**
+**Step 4: Avvia tutti i servizi**
 
 ```bash
 docker compose up -d --build
@@ -680,15 +670,8 @@ Ora passa alla sezione 9.3.
 
 Usa questo percorso per il deploy in produzione con certificato SSL Let's Encrypt. Richiede un dominio reale con record DNS che punta all'IP del server e le porte 80/443 aperte.
 
-**Step 1: Preparazione del server (solo al primo accesso)**
 
-```bash
-sudo dnf install git -y          # oppure: sudo apt install git -y
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**Step 2: Clona il repository e configura l'ambiente**
+**Step 1: Clona il repository e configura l'ambiente**
 
 ```bash
 git clone https://github.com/SoniaSergio/EvSw_Project.git
@@ -712,13 +695,11 @@ Per generare la ENCRYPTION_KEY :
 pip install cryptography
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 
-# Linux / macOS (usare python3/pip3 o python/pip in base alla distribuzione)
-pip3 install cryptography
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
+
+# Linux / macOS possono cambiare in base alla distribuzione scelta
 
 
-**Step 3: Posiziona i modelli scaricati**
+**Step 2: Posiziona i modelli scaricati**
 
 
 Crea la cartella models:
@@ -729,7 +710,7 @@ mkdir prediction-service/models
 
 Usa un client SFTP per trasferire i due modelli al percorso `~/EvSw_Project/prediction-service/models/` sul server.
 
-**Step 4: Crea le cartelle per Certbot sull'host e apri le porte**
+**Step 3: Crea le cartelle per Certbot sull'host e apri le porte**
 
 ```bash
 sudo mkdir -p /var/www/certbot
@@ -741,7 +722,7 @@ sudo firewall-cmd --reload
 
 > Apri anche le porte 80 e 443 nelle regole di sicurezza della console del cloud provider.
 
-**Step 5: Ottieni il certificato SSL tramite Certbot**
+**Step 4: Ottieni il certificato SSL tramite Certbot**
 
 Avvia prima i servizi necessari al challenge HTTP:
 
@@ -763,7 +744,7 @@ docker run --rm \
   -d tuo-dominio.com
 ```
 
-**Step 6: Avvia l'intero stack**
+**Step 5: Avvia l'intero stack**
 
 ```bash
 docker compose up -d --build
