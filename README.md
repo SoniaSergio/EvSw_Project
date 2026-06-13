@@ -134,14 +134,13 @@ Il sistema è composto da **5 servizi Docker** comunicanti su una rete bridge de
 
 Seguendo il principio dell'architettura a livelli, i componenti al livello X interagiscono esclusivamente con le API dei componenti al livello X-1: il frontend non accede mai direttamente a MongoDB, ma passa sempre attraverso i microservizi. Questo garantisce disaccoppiamento, sostituibilità dei livelli e sicurezza per livelli (un attaccante che compromette il frontend non ha accesso diretto al database).
 
-Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati 
-**prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM. 
+Per garantire la confidenzialità dei dati medici, l'architettura implementa il pattern **Application-Layer Data Encryption (ALDE)**. 
+Nessun dato clinico sensibile risiede in chiaro nel database: il Service Layer cifra i dati **prima** della scrittura e li decifra **dopo** la lettura, esclusivamente in memoria RAM. 
 La cifratura utilizza **Fernet**, uno standard crittografico che combina tre meccanismi: 
 **AES-256** per cifrare i dati con una chiave a 256 bit, **CBC** (Cipher Block Chaining) 
 per rendere ogni blocco cifrato dipendente dal precedente — impedendo l'analisi statistica 
-del testo cifrato — e **HMAC** come firma crittografica che garantisce l'integrità dei dati, 
-rendendo rilevabile qualsiasi manomissione del database.**
-Questo garantisce il principio di *Encryption at Rest*: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
+del testo cifrato — e **HMAC** come firma crittografica che garantisce l'integrità dei dati, rendendo rilevabile qualsiasi manomissione del database.
+Questo garantisce il principio di **Encryption at Rest**: anche in caso di compromissione diretta del database, i dati risultano illeggibili senza la chiave.
 
 ### Attributi di qualità
 
@@ -346,6 +345,7 @@ Restituisce i risultati di classificazione completi di entrambi i modelli e gene
 
 #### `GET /api/predict/health`
 Endpoint di monitoraggio infrastrutturale per il container di inferenza.
+
 Response 200 OK: { "status": "ok", "service": "prediction-service" }
 
 
@@ -485,7 +485,7 @@ L'obiettivo per questo target è l'efficienza clinica, l'accuratezza dei dati e 
 * **Test B.2: Risoluzione della Discordia tra Modelli**
   * **Obiettivo:** Aiutare il medico a prendere una decisione nel minor tempo possibile quando CNN e Random Forest non sono d'accordo.
   * **Azione Utente:** Viene caricato un battito d'esempio ambiguo; la CNN predice `Sopraventricolare (S)` e il Random Forest predice `Normale (N)`.
-  * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo di colore giallo in caso di discordanza. Il sistema non fornisce una diagnosi definitiva, ma presenta i dati in modo chiaro per supportare la valutazione clinica del professionista.
+  * **Risultato Atteso:** L'interfaccia evidenzia visivamente le metriche di confidenza di entrambi i modelli e attiva un alert visivo in caso di discordanza. Il sistema non fornisce una diagnosi definitiva, ma presenta i dati in modo chiaro per supportare la valutazione clinica del professionista.
 
 ---
 
@@ -830,7 +830,7 @@ Copiare `.env.example` in `.env` e configurare le variabili prima dell'avvio. Il
 | Variabile | Esempio | Descrizione |
 |:---|:---|:---|
 | `MONGO_URI` | `mongodb://mongo:27017/ecgdb` | URI di connessione MongoDB. In Docker Compose usare il nome del servizio (`mongo`) come host. |
-| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Vedere sezione 9.2 per il comando di generazione. |
+| `ENCRYPTION_KEY` | `g3k8F...=` | Chiave Fernet a 32-byte per la cifratura ALDE. Vedere sezione 9 (Percorso A/B/C, step configurazione .env) per il comando di generazione. |
 | `NGINX_MODE` | `http` / `https` | Seleziona il template Nginx: `http` per localhost e IP, `https` per produzione con dominio. |
 | `SERVER_NAME` | `localhost` / indirizzo IP /`ecg.heremy.link` | Usato dall'entrypoint per compilare il template Nginx. |
 | `CERTBOT_PATH` | `./certbot/empty` / `/etc/letsencrypt` | Percorso dei certificati SSL. Usare `./certbot/empty` per HTTP, `/etc/letsencrypt` per HTTPS. |
@@ -884,7 +884,7 @@ Il campo `signal_encrypted` dovrà apparire come stringa cifrata, mentre `ground
 | **"Bind for 0.0.0.0:80 failed: port is already allocated"** | Un altro servizio host (es. Apache o un Nginx locale) sta già occupando la porta 80. | Fermare il servizio in conflitto (es. `sudo systemctl stop apache2` o `sudo systemctl stop nginx`), oppure modificare le porte esposte nel file `docker-compose.yml`. |
 | **Nginx non parte / configurazione errata** | `entrypoint.sh` ha line endings Windows (CRLF). | Eseguire `sed -i 's/\r//' frontend/entrypoint.sh` e rebuilare con `docker compose up -d --build --force-recreate frontend`. |
 | **exec /entrypoint.sh: no such file or directory** | Line endings Windows (CRLF) nel file .sh. | In VSCode aprire entrypoint.sh, cambiare CRLF → LF in basso a destra, salvare e rebuilare. Il file .gitattributes nel repo previene il problema automaticamente. |
-| **InvalidToken / cryptography.fernet.InvalidToken sull'history-service** | La ENCRYPTION_KEY nel .env è stata cambiata dopo che i dati erano già stati cifrati con una chiave precedente. | Svuotare il database e rieseguire il seed: `docker compose exec mongo mongosh ecgdb --eval "db.predictions.drop(); db.ecg_samples.drop()"` poi `docker compose build seed` && `docker compose up seed` |
+| **InvalidToken / cryptography.fernet.InvalidToken sull'history-service** | La ENCRYPTION_KEY nel .env è stata cambiata dopo che i dati erano già stati cifrati con una chiave precedente. | Svuotare il database: docker compose exec mongo mongosh ecgdb --eval "db.predictions.drop(); db.ecg_samples.drop()" — poi rieseguire il seed: docker compose build seed seguito da docker compose up seed. |
 
 ---
  
